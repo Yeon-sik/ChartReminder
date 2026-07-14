@@ -1,0 +1,9 @@
+{
+  "name": "investment-replay-claude-kit",
+  "version": "1.0.1",
+  "language": "ko-KR",
+  "file_count": 49,
+  "purpose": "Claude Code planning, specification, milestone and prompt kit for Investment Replay desktop app",
+  "entrypoint": "README_FIRST.md",
+  "first_prompt": "prompts/00_MASTER_START.md"
+}

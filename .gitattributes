@@ -1,0 +1,5 @@
+# Normalize line endings: store LF in the repository, let editors use their default locally.
+* text=auto
+*.png binary
+*.ico binary
+*.icns binary
