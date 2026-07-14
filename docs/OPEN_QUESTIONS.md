@@ -8,13 +8,13 @@
 - 임시명: Investment Replay
 - 영향: 앱 identifier, 패키지명, README, 디자인
 - M0에서는 안전한 임시 identifier를 사용하고 변경 가능성을 기록한다.
+- M0 진행 기록: identifier `com.investmentreplay.dev`, 패키지명 `investment-replay` 사용 중(D-007). 최종 제품명은 늦어도 M6 첫 공개 배포 전에 확정 필요.
 
 ## OQ-002 패키지 매니저
 
-- 상태: OPEN
-- 후보: npm, pnpm
-- 기본 판단: 단일 앱 초기에는 npm도 충분
-- M0에서 현재 환경과 공식 Tauri 스캐폴딩을 기준으로 결정
+- 상태: RESOLVED (2026-07-14, D-006)
+- 결정: npm
+- 근거: 단일 앱 저장소에는 npm으로 충분하고 Tauri 공식 스캐폴딩 기본 경로와 일치
 
 ## OQ-003 암호화폐 기준 거래쌍
 

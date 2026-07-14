@@ -36,6 +36,35 @@
 - 선택: 금액·수량 누적 계산에 일반 JS number 사용 금지
 - 이유: 금융 계산의 부동소수점 오차 방지
 
+## D-006: 패키지 매니저 npm
+
+- 상태: Accepted
+- 맥락: OQ-002. 환경에 npm 10.9.3과 pnpm 10.34.1이 모두 설치되어 있음
+- 선택: npm
+- 대안: pnpm
+- 이유: 단일 앱 저장소에서는 npm으로 충분하고(OQ-002의 기본 판단), Tauri 공식 스캐폴딩·문서의 기본 경로와 일치해 마찰이 적음
+- 결과: `package-lock.json` 커밋, 모든 스크립트는 `npm run` 기준
+- 재검토 조건: 모노레포 전환 또는 설치 속도가 실제 문제로 확인될 때
+
+## D-007: M0 임시 식별자와 제품명
+
+- 상태: Accepted
+- 맥락: OQ-001(제품명)이 미결정. Tauri identifier는 배포 후 변경 비용이 큼
+- 선택: identifier `com.investmentreplay.dev`, 표시명 "Investment Replay", 패키지명 `investment-replay`
+- 이유: `.dev` 접미사로 임시 식별자임을 드러내고, 최종 제품명 확정 시 첫 공개 배포(M6) 전에 일괄 변경
+- 결과: `tauri.conf.json`, `package.json`, `Cargo.toml`에 반영
+- 재검토 조건: OQ-001 확정 시. 늦어도 M6 첫 공개 배포 전
+
+## D-008: 품질 도구 구성
+
+- 상태: Accepted
+- 맥락: M0은 반복 가능한 검증 명령을 요구함. GitHub 원격 저장소가 아직 없음
+- 선택: Prettier(포맷) + ESLint 10 flat config(typescript-eslint, react-hooks) + Vitest(단위 테스트) + `cargo check`, 이를 `npm run verify`로 일괄 실행
+- 대안: Biome(단일 도구), GitHub Actions CI
+- 이유: 각 영역의 사실상 표준이며 Tauri/Vite 생태계 문서와 호환. CI는 원격 저장소가 생기기 전에는 검증 불가능하므로 로컬 `verify` 명령으로 대체
+- 결과: `eslint.config.mjs`, `.prettierrc.json`, `vitest.config.ts`, package.json scripts
+- 재검토 조건: GitHub 원격 생성 시 CI(GitHub Actions) 추가, 도구 성능이 문제되면 Biome 평가
+
 ## 새 결정 템플릿
 
 ```text
