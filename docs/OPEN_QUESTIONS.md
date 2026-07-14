@@ -18,10 +18,9 @@
 
 ## OQ-003 암호화폐 기준 거래쌍
 
-- 상태: OPEN
-- 후보: USDT 기준, USD 기준
-- 고려: 공급자 접근성, 사용자 표시 의미
-- 첫 Provider 결정 시 확정
+- 상태: RESOLVED (2026-07-14, D-010)
+- 결정: USDT 기준 (Binance BTCUSDT·ETHUSDT·SOLUSDT)
+- 근거: Binance 공개 API에 USD 현물 쌍이 없음. UI에 해당 공급자의 USDT 시장 가격임을 명시
 
 ## OQ-004 미국 주식 데이터 공급자
 

@@ -4,12 +4,20 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M1 — 순수 도메인과 Golden Fixture
+- 현재 마일스톤: M2 — 암호화폐 Provider와 로컬 캐시
 - 상태: DONE
 - 마지막 갱신: 2026-07-14
 
 ## 완료된 마일스톤
 
+- M2 — 암호화폐 Provider와 로컬 캐시 (2026-07-14)
+  - `src/application/ports`: MarketDataProvider·CandleRepository·Clock 포트, 공급자 오류 분류(network/rate-limit/invalid-response/provider)
+  - `src/domain/market-data/timeRange.ts`: UTC 반개구간, 커버리지 병합·차집합 순수 함수
+  - `src/infrastructure/providers/binance`: BTC·ETH·SOL USDT 일봉 adapter (D-010) — 런타임 검증, 정규화, 페이지네이션 결합, 지수 백오프 재시도, 429 Retry-After 준수, 418 즉시 중단, 미완성 오늘 캔들 제외
+  - `src/infrastructure/persistence`: TS 마이그레이션 러너 + SQLite 캔들 캐시 저장소(커버리지 병합 포함, D-011), tauri-plugin-sql 2.4 연결
+  - `src/application/use-cases/ensureCandleRangeCached.ts`: 캐시 우선, 누락 구간만 조회
+  - 계약·통합 테스트 62개 추가 (better-sqlite3 in-memory로 실제 SQLite 실행), 실 API 스모크는 `LIVE_API=1` opt-in으로 분리 (1회 수동 실행 PASS)
+  - `docs/providers/BINANCE.md`: 데이터 의미·호출 제한·이용조건 기록
 - M1 — 순수 도메인과 Golden Fixture (2026-07-14)
   - `src/domain/shared`: DecimalString 검증·파싱, decimal.js 10.6.0 캡슐화(D-009), Money, CurrencyCode, TradingDate·UTC ms 시간 표현, DomainValidationError
   - `src/domain/instrument`: Instrument 타입 (docs/02 §1)
@@ -28,8 +36,9 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 ## 현재 구현된 기능
 
 - 최소 시작 화면 (앱 목적·현재 마일스톤 상태 표시만, 기능 없음)
-- 순수 도메인 계층 (내부 모듈, 사용자 노출 기능 아님): Decimal/Money/시간 값 객체, Candle 불변조건 검증, 타임라인 합집합, Golden Fixture
-- 시장 데이터 조회, 차트, 리플레이, 시뮬레이션: 미구현
+- 순수 도메인 계층 (내부 모듈): Decimal/Money/시간 값 객체, Candle 불변조건 검증, 타임라인 합집합, 시간 범위 연산, Golden Fixture
+- 시장 데이터 계층 (내부 모듈, UI 미연결): Binance BTC·ETH·SOL USDT 일봉 조회·정규화, SQLite 캐시(누락 구간만 재조회)
+- 차트, 리플레이, 시뮬레이션, UI 연결: 미구현
 
 ## 검증 상태
 
@@ -38,9 +47,10 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 | Format | PASS | `npm run format:check` | Prettier 3.9, Markdown 문서는 제외 |
 | Lint | PASS | `npm run lint` | ESLint 10 flat config |
 | Typecheck | PASS | `npm run typecheck` | tsc strict |
-| Unit test | PASS | `npm run test` | Vitest 4, 97개 테스트 (도메인 + appInfo) |
-| Integration test | NOT_CONFIGURED | - | M2 Provider 계약 테스트에서 도입 예정 |
-| Cargo check | PASS | `npm run check:rust` | 9s (M1, 2026-07-14) |
+| Unit test | PASS | `npm run test` | Vitest 4, 159개 테스트 + live 1개 skip |
+| Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case 통합 포함 |
+| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, 2026-07-14 수동 1회 PASS |
+| Cargo check | PASS | `npm run check:rust` | 35s (M2, tauri-plugin-sql 포함) |
 | Desktop build | PASS | `npm run tauri build` | MSI + NSIS 번들 생성 (M0, 2026-07-14) |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
@@ -56,6 +66,8 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 임시 identifier: `com.investmentreplay.dev` (D-007, OQ-001 확정 전까지)
 - 품질 도구: Prettier + ESLint + Vitest + cargo check, CI는 GitHub 원격 생성 후 (D-008)
 - Decimal 라이브러리: decimal.js 10.6.0, `src/domain/shared/decimal.ts`로 캡슐화 (D-009)
+- 암호화폐 공급자: Binance 공개 klines API, USDT 거래쌍, base URL `data-api.binance.vision` (D-010, OQ-003 RESOLVED)
+- SQLite: 연결은 tauri-plugin-sql, 스키마 마이그레이션은 TS 러너, 테스트는 better-sqlite3 (D-011)
 
 ## 열린 문제
 
@@ -64,5 +76,4 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 다음 작업
 
-1. `prompts/03_M2_CRYPTO_PROVIDER.md` 수행 (암호화폐 Provider와 로컬 캐시)
-   - 선행 결정 필요: OQ-003 (암호화폐 기준 거래쌍 USDT vs USD)
+1. `prompts/04_M3_REPLAY_ENGINE.md` 수행 (리플레이 엔진)
