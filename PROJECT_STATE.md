@@ -4,12 +4,19 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M2 — 암호화폐 Provider와 로컬 캐시
+- 현재 마일스톤: M3 — 리플레이 엔진
 - 상태: DONE
 - 마지막 갱신: 2026-07-14
 
 ## 완료된 마일스톤
 
+- M3 — 리플레이 엔진 (2026-07-14)
+  - `src/domain/replay/replayDataset.ts`: 거래일 합집합 타임라인 데이터셋 빌더, gap 유지 캔들 조회 인덱스
+  - `src/domain/replay/replayEngine.ts`: 결정론적 상태 머신 — initialize/play/pause/stepForward/seek(index·date)/setSpeed(0.25~10x)/restart/dispose, 이벤트 구독, 중복 타이머 방지, 리스너 예외 시 error 전이
+  - `src/domain/replay/replayScheduler.ts`: 타이머 포트 (도메인은 실제 시간을 모름)
+  - `src/infrastructure/timers/timeoutReplayScheduler.ts`: setTimeout 어댑터 (M5에서 주입)
+  - `src/test/fakeReplayScheduler.ts`: 가상 시간 가짜 스케줄러
+  - 상태 전이 테스트 34개 추가 (동일 명령 순서 → 동일 전이 로그 결정론 검증 포함)
 - M2 — 암호화폐 Provider와 로컬 캐시 (2026-07-14)
   - `src/application/ports`: MarketDataProvider·CandleRepository·Clock 포트, 공급자 오류 분류(network/rate-limit/invalid-response/provider)
   - `src/domain/market-data/timeRange.ts`: UTC 반개구간, 커버리지 병합·차집합 순수 함수
@@ -38,7 +45,8 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 최소 시작 화면 (앱 목적·현재 마일스톤 상태 표시만, 기능 없음)
 - 순수 도메인 계층 (내부 모듈): Decimal/Money/시간 값 객체, Candle 불변조건 검증, 타임라인 합집합, 시간 범위 연산, Golden Fixture
 - 시장 데이터 계층 (내부 모듈, UI 미연결): Binance BTC·ETH·SOL USDT 일봉 조회·정규화, SQLite 캐시(누락 구간만 재조회)
-- 차트, 리플레이, 시뮬레이션, UI 연결: 미구현
+- 리플레이 엔진 (내부 모듈, UI 미연결): 합집합 타임라인, 재생·일시정지·스텝·seek·속도·restart, 가짜 시계 완전 결정론
+- 차트, 시뮬레이션, UI 연결: 미구현
 
 ## 검증 상태
 
@@ -47,7 +55,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 | Format | PASS | `npm run format:check` | Prettier 3.9, Markdown 문서는 제외 |
 | Lint | PASS | `npm run lint` | ESLint 10 flat config |
 | Typecheck | PASS | `npm run typecheck` | tsc strict |
-| Unit test | PASS | `npm run test` | Vitest 4, 159개 테스트 + live 1개 skip |
+| Unit test | PASS | `npm run test` | Vitest 4, 193개 테스트 + live 1개 skip |
 | Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case 통합 포함 |
 | Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, 2026-07-14 수동 1회 PASS |
 | Cargo check | PASS | `npm run check:rust` | 35s (M2, tauri-plugin-sql 포함) |
@@ -76,4 +84,5 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 다음 작업
 
-1. `prompts/04_M3_REPLAY_ENGINE.md` 수행 (리플레이 엔진)
+1. `prompts/05_M4_SIMULATION_ENGINE.md` 수행 (투자 시뮬레이션 엔진)
+   - 선행 결정 필요: OQ-007 (MDD 정의 — 테스트·UI 명칭으로 확정)
