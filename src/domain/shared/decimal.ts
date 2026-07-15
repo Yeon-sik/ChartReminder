@@ -2,6 +2,9 @@ import { Decimal } from "decimal.js";
 
 import { DomainValidationError } from "./errors";
 
+/** 도메인 코드는 decimal.js를 직접 import하지 않고 이 타입을 사용한다 (D-009). */
+export type { Decimal } from "decimal.js";
+
 /**
  * 도메인 경계에서 사용하는 직렬화 가능한 10진 문자열. (docs/02_DOMAIN_MODEL.md §3)
  *

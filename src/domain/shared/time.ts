@@ -14,7 +14,7 @@ export type TradingDate = string;
 
 const TRADING_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-function daysInMonth(year: number, month: number): number {
+export function daysInMonth(year: number, month: number): number {
   if (month === 2) {
     const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     return isLeapYear ? 29 : 28;
@@ -58,4 +58,31 @@ export function compareTradingDates(a: TradingDate, b: TradingDate): -1 | 0 | 1 
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;
+}
+
+/** 거래일의 (연, 월, 일) 분해. 유효성 검증 포함. */
+export function tradingDateParts(date: TradingDate): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  assertTradingDate(date);
+  const [year, month, day] = date.split("-").map(Number);
+  return { year, month, day };
+}
+
+/** ISO 요일. 1=월요일 … 7=일요일. */
+export function isoDayOfWeek(date: TradingDate): number {
+  const { year, month, day } = tradingDateParts(date);
+  const utcDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0=일
+  return utcDay === 0 ? 7 : utcDay;
+}
+
+/** 달력일 기준 n일 이동. 결정론적 UTC 산술만 사용한다. */
+export function addDaysToTradingDate(date: TradingDate, days: number): TradingDate {
+  const { year, month, day } = tradingDateParts(date);
+  if (!Number.isSafeInteger(days)) {
+    throw new DomainValidationError(`이동 일수가 정수가 아니다: ${days}`);
+  }
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }

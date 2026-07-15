@@ -119,3 +119,112 @@ export const GOLDEN_LUMP_SUM_EXPECTED = {
   /** 최대 낙폭. 정확한 값은 2/11 (총자산 기준, docs/05 §7·OQ-007 참조) */
   maxDrawdownRate: "0.1818181818",
 } as const;
+
+/**
+ * 일시투자 + 수수료 25% 시나리오의 독립 기대값. (docs/16 §6)
+ * 손 계산: gross = 1000 ÷ 1.25 = 800, fee = 200, 수량 = 800 ÷ 100 = 8.
+ */
+export const GOLDEN_LUMP_SUM_FEE_EXPECTED = {
+  initialCash: "1000",
+  feeRate: "0.25",
+  quantity: "8",
+  grossAmount: "800",
+  fee: "200",
+  remainingCash: "0",
+  days: [
+    {
+      date: "2024-01-01",
+      totalValue: "800",
+      profitLoss: "-200",
+      returnRate: "-0.2",
+      drawdownRate: "0",
+    },
+    {
+      date: "2024-01-02",
+      totalValue: "880",
+      profitLoss: "-120",
+      returnRate: "-0.12",
+      drawdownRate: "0",
+    },
+    // 낙폭 정확값 (880-720)/880 = 2/11
+    {
+      date: "2024-01-03",
+      totalValue: "720",
+      profitLoss: "-280",
+      returnRate: "-0.28",
+      drawdownRate: "0.1818181818",
+    },
+    {
+      date: "2024-01-04",
+      totalValue: "960",
+      profitLoss: "-40",
+      returnRate: "-0.04",
+      drawdownRate: "0",
+    },
+    {
+      date: "2024-01-05",
+      totalValue: "960",
+      profitLoss: "-40",
+      returnRate: "-0.04",
+      drawdownRate: "0",
+    },
+  ],
+  finalReturnRate: "-0.04",
+  maxDrawdownTotalValue: "0.1818181818",
+  maxDrawdownPrice: "0.1818181818",
+} as const;
+
+/**
+ * 매주 정기매수(수요일, 450, 수수료 0) 시나리오의 독립 기대값. (docs/16 §7)
+ * 2024-01-01은 월요일이므로 기간 내 예정일은 2024-01-03 하나다.
+ * 손 계산: 1/3 납입 450 → 종가 90 매수 → 수량 5.
+ * 가격 MDD(2/11)와 총자산 MDD(0)가 달라지는 사례다 (D-012).
+ */
+export const GOLDEN_DCA_WEEKLY_EXPECTED = {
+  initialCash: "0",
+  recurringAmount: "450",
+  anchorIsoDayOfWeek: 3, // 수요일
+  feeRate: "0",
+  quantity: "5",
+  days: [
+    {
+      date: "2024-01-01",
+      contributedCapital: "0",
+      totalValue: "0",
+      returnRate: "0",
+      drawdownRate: "0",
+    },
+    {
+      date: "2024-01-02",
+      contributedCapital: "0",
+      totalValue: "0",
+      returnRate: "0",
+      drawdownRate: "0",
+    },
+    {
+      date: "2024-01-03",
+      contributedCapital: "450",
+      totalValue: "450",
+      returnRate: "0",
+      drawdownRate: "0",
+    },
+    // 수익률 정확값 150/450 = 1/3
+    {
+      date: "2024-01-04",
+      contributedCapital: "450",
+      totalValue: "600",
+      returnRate: "0.3333333333",
+      drawdownRate: "0",
+    },
+    {
+      date: "2024-01-05",
+      contributedCapital: "450",
+      totalValue: "600",
+      returnRate: "0.3333333333",
+      drawdownRate: "0",
+    },
+  ],
+  finalReturnRate: "0.3333333333",
+  maxDrawdownTotalValue: "0",
+  maxDrawdownPrice: "0.1818181818",
+} as const;
