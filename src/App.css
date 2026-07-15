@@ -1,11 +1,86 @@
+/*
+  디자인 토큰. "리플레이 원장(ledger)" 컨셉 — 과거 시세를 손으로 되짚는 장부처럼,
+  담백한 종이/잉크 배경에 금액은 항상 표(tabular) 고정폭 숫자로 찍는다.
+  자산 2개는 앰버(원장 인장)·스틸블루(먹줄) 두 색으로 구분하고, 선 스타일(실선/점선)로도
+  겹쳐 구분한다 — 색만으로 의미를 전달하지 않는다.
+*/
 :root {
   color-scheme: light dark;
-  font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
-  line-height: 1.6;
+
+  --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", "Noto Serif KR", serif;
+  --font-body: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", "SF Mono", ui-monospace, monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius: 0.5rem;
+  --radius-sm: 0.35rem;
+
+  /* 라이트 모드 (기본) */
+  --color-bg: #f7f6f2;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f0efe9;
+  --color-border: #dcd8cc;
+  --color-text: #1b1f23;
+  --color-text-muted: #5b6169;
+  --color-accent-asset-1: #a8701c;
+  --color-accent-asset-2: #2a6ca6;
+  --color-gain: #1e7a54;
+  --color-loss: #b23a2e;
+  --color-warning-bg: #fbf0dc;
+  --color-warning-text: #7a4a10;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #14181d;
+    --color-surface: #1b2027;
+    --color-surface-sunken: #10141a;
+    --color-border: #333a42;
+    --color-text: #e9e7e0;
+    --color-text-muted: #9aa0a6;
+    --color-accent-asset-1: #e0a94a;
+    --color-accent-asset-2: #6fa8dc;
+    --color-gain: #4cae7d;
+    --color-loss: #e2665a;
+    --color-warning-bg: #3a2f16;
+    --color-warning-text: #f0c987;
+  }
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  margin: 0 0 var(--space-2);
+  font-size: 2rem;
+}
+
+.tabular-figures {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .container {
@@ -14,37 +89,17 @@ body {
   padding: 4rem 1.5rem;
 }
 
-.milestone-badge {
-  display: inline-block;
-  margin: 0 0 0.75rem;
-  padding: 0.2rem 0.7rem;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  font-size: 0.8rem;
+:focus-visible {
+  outline: 2px solid var(--color-accent-asset-2);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
-h1 {
-  margin: 0 0 0.5rem;
-  font-size: 2rem;
-}
-
-.tagline {
-  margin: 0;
-  opacity: 0.85;
-}
-
-.status {
-  margin-top: 2.5rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 0.5rem;
-}
-
-.status h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.1rem;
-}
-
-.status p {
-  margin: 0;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

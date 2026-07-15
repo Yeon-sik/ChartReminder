@@ -1,0 +1,230 @@
+.replay-workspace {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: var(--space-6) 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.replay-workspace__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.replay-workspace__header button {
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.replay-workspace__runtime-note {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.replay-workspace__loading,
+.replay-workspace__error {
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.replay-workspace__error {
+  border-color: var(--color-loss);
+  color: var(--color-loss);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.replay-workspace__notices {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-warning-text);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+/* ── 재생 컨트롤: 테이프 데크 스타일 트랜스포트 바 ─────────────────────── */
+
+.playback-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.playback-controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.playback-controls button:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.playback-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.playback-controls__icon {
+  width: 0.85em;
+  height: 0.85em;
+  fill: currentColor;
+  flex: none;
+}
+
+.playback-controls__speed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.playback-controls__speed select {
+  font: inherit;
+  font-family: var(--font-mono);
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* 시그니처 요소: 리플레이 날짜를 원장 티커처럼 각인해 보여준다 */
+.playback-controls__status {
+  margin: 0 0 0 auto;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+}
+
+/* ── 결과 요약 ──────────────────────────────────────────────────────── */
+
+.result-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: var(--space-4);
+}
+
+.result-summary__asset {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-6);
+}
+
+.result-summary__asset h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 1.15rem;
+}
+
+.result-summary__date {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.result-summary__notice {
+  color: var(--color-warning-text);
+  font-size: 0.85rem;
+}
+
+.result-summary dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem var(--space-4);
+  margin: 0;
+}
+
+.result-summary dt {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  align-self: center;
+}
+
+.result-summary dd {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.result-summary dd.is-gain {
+  color: var(--color-gain);
+}
+
+.result-summary dd.is-loss {
+  color: var(--color-loss);
+}
+
+.result-summary__final {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--color-border);
+}
+
+.result-summary__final h4 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.result-summary__assumptions {
+  margin-top: var(--space-4);
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* ── 차트 섹션 ──────────────────────────────────────────────────────── */
+
+.chart-section h2 {
+  font-size: 1.15rem;
+  margin: 0 0 var(--space-3);
+}
+
+.chart-frame {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}

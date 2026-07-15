@@ -4,12 +4,23 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M4 — 투자 시뮬레이션 엔진
+- 현재 마일스톤: M5 — MVP UI
 - 상태: DONE
 - 마지막 갱신: 2026-07-15
 
 ## 완료된 마일스톤
 
+- M5 — MVP UI (2026-07-15)
+  - `src/domain/market-data/priceNormalization.ts`: 시작점 100 정규화·누적 수익률 순수 함수(Decimal 경계)
+  - `src/application/use-cases/prepareReplaySession.ts`: 자산 1~2개 선택 → 캐시 우선 조회 → 합집합 데이터셋 → 자산별(서로 다른 규칙 허용) 시뮬레이션 실행을 오케스트레이션. 상장 이전·데이터 없음·중간 누락을 엔진 재계산 없이 판정하는 `AssetDataNotice`
+  - `src/app/composition.ts`: 조합 루트 — `isTauri()`로 Tauri(SqliteCandleRepository)와 브라우저 프리뷰(InMemoryCandleRepository) 분기, Binance Provider·재생 스케줄러 조립. React 컴포넌트는 이 결과만 주입받는다
+  - `src/infrastructure/persistence/inMemoryCandleRepository.ts`: 브라우저 프리뷰 전용 메모리 캐시(영속성 없음)
+  - `src/features/replay-workspace/viewModel.ts`: **미래 데이터 비노출(R6)의 실제 구현 지점** — 가격·투자금 차트와 결과 요약 모두 `cursorIndex`까지만 자른다. MDD 등 구간 전체 지표는 리플레이가 마지막 날에 도달했을 때만 노출
+  - `src/features/replay-workspace/`: TradingView Lightweight Charts v5 래퍼(`LineSeriesChart`), 재생 제어(Space/→/Home 키보드, 네이티브 버튼), 결과 요약(원금·평가액·손익·수익률·MDD·데이터 상태·계산 가정)
+  - `src/features/session-setup/`: 자산 1~2개(서로 다른 투자 규칙) 선택, 기간·표시 기준·일시투자/정기매수 폼, 폼→요청 변환과 클라이언트 검증
+  - 시각 디자인: Georgia(제목)·Segoe UI(본문)·Consolas(금액·날짜, tabular-nums) 3단 타이포그래피, 라이트/다크 CSS 변수 토큰, 손익은 색+화살표 글리프 병기(색상만으로 의미 전달 금지)
+  - `@testing-library/react` + jsdom 도입(vitest 전역 환경), 새 테스트 84개(도메인·유스케이스·view model·컴포넌트) — 특히 viewModel 커서 절단이 미래 데이터를 포함하지 않는지 검증
+  - Playwright MCP로 `npm run dev` 브라우저에서 실제 흐름 검증(설정 → 실제 Binance 데이터 조회 → 차트 렌더 → 재생/일시정지/한 단계/처음으로/키보드 → 2자산 서로 다른 규칙 비교), 콘솔 오류 없음 확인. Tauri 네이티브 통합(SQLite 영속성)은 대체하지 못함 — 브라우저 프리뷰는 InMemory 캐시 사용
 - M4 — 투자 시뮬레이션 엔진 (2026-07-15)
   - `src/domain/simulation/simulationConfig.ts`: SimulationConfig 불변조건 검증(일시투자·정기매수 모드별 규칙, 음수·통화 불일치·anchor 종류 거부)
   - `src/domain/simulation/contributionSchedule.ts`: 매주·매월 정기 납입 예정일 생성(달력 기준, 말일 클램프)
@@ -52,12 +63,12 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 구현된 기능
 
-- 최소 시작 화면 (앱 목적·현재 마일스톤 상태 표시만, 기능 없음)
-- 순수 도메인 계층 (내부 모듈): Decimal/Money/시간 값 객체, Candle 불변조건 검증, 타임라인 합집합, 시간 범위 연산, Golden Fixture
-- 시장 데이터 계층 (내부 모듈, UI 미연결): Binance BTC·ETH·SOL USDT 일봉 조회·정규화, SQLite 캐시(누락 구간만 재조회)
-- 리플레이 엔진 (내부 모듈, UI 미연결): 합집합 타임라인, 재생·일시정지·스텝·seek·속도·restart, 가짜 시계 완전 결정론
-- 투자 시뮬레이션 엔진 (내부 모듈, UI 미연결): 일시투자·정기 정액매수(매주·매월), 수수료, 소수점 매수 허용/비허용, 휴장일 이월, 기여 원금·현금·수량·평가액·손익·수익률, 가격/총자산 두 기준 MDD
-- 차트, UI 연결: 미구현
+- 순수 도메인 계층 (내부 모듈): Decimal/Money/시간 값 객체, Candle 불변조건 검증, 타임라인 합집합, 시간 범위 연산, 가격 정규화, Golden Fixture
+- 시장 데이터 계층: Binance BTC·ETH·SOL USDT 일봉 조회·정규화, SQLite 캐시(Tauri)/메모리 캐시(브라우저 프리뷰)
+- 리플레이 엔진: 합집합 타임라인, 재생·일시정지·스텝·seek·속도·restart, 가짜 시계 완전 결정론
+- 투자 시뮬레이션 엔진: 일시투자·정기 정액매수(매주·매월), 수수료, 소수점 매수 허용/비허용, 휴장일 이월, 기여 원금·현금·수량·평가액·손익·수익률, 가격/총자산 두 기준 MDD
+- **UI 연결 완료(M5)**: 자산 1~2개 선택(서로 다른 투자 규칙 허용) → 데이터 조회 → 재생(재생/일시정지/한 단계/처음으로/속도, 키보드 지원) → 가격·투자금 차트 → 결과 요약까지 전체 흐름 동작. 로딩·오류·데이터 경고(상장 이전·중간 누락) 상태 포함
+- 세션 저장·불러오기, CSV/JSON 내보내기: 미구현 (M6 예정)
 
 ## 검증 상태
 
@@ -66,11 +77,13 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 | Format | PASS | `npm run format:check` | Prettier 3.9, Markdown 문서는 제외 |
 | Lint | PASS | `npm run lint` | ESLint 10 flat config |
 | Typecheck | PASS | `npm run typecheck` | tsc strict |
-| Unit test | PASS | `npm run test` | Vitest 4, 254개 테스트 + live 1개 skip |
-| Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case 통합 포함 |
+| Unit test | PASS | `npm run test` | Vitest 4 + jsdom, 338개 테스트 + live 1개 skip |
+| Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 포함 |
 | Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, 2026-07-14 수동 1회 PASS |
-| Cargo check | PASS | `npm run check:rust` | 14s (M4, 2026-07-15) |
-| Desktop build | PASS | `npm run tauri build` | MSI + NSIS 번들 생성 (M0, 2026-07-14) |
+| Cargo check | PASS | `npm run check:rust` | M5, 2026-07-15 |
+| Production build | PASS | `npm run build` | tsc + vite build, 2026-07-15 |
+| Desktop build | PASS | `npm run tauri build` | MSI + NSIS 번들 생성 (M0, 2026-07-14; M5에서 재검증 안 함) |
+| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 실제 Binance 데이터로 설정→재생→2자산 비교 흐름 확인, 콘솔 오류 없음. Tauri 네이티브 통합은 대체하지 못함 |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
 
@@ -88,12 +101,15 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 암호화폐 공급자: Binance 공개 klines API, USDT 거래쌍, base URL `data-api.binance.vision` (D-010, OQ-003 RESOLVED)
 - SQLite: 연결은 tauri-plugin-sql, 스키마 마이그레이션은 TS 러너, 테스트는 better-sqlite3 (D-011)
 - MDD 정의와 비율 반올림: 가격 기준 MDD를 기본 제공하고 총자산 기준 MDD를 별도 표기, 비율은 소수 10자리 ROUND_HALF_UP (D-012, OQ-007 RESOLVED)
+- 차트 라이브러리: TradingView Lightweight Charts v5 (D-013). CORS 확인 완료(`data-api.binance.vision`이 `Access-Control-Allow-Origin: *` 응답), 공식 React 튜토리얼 패턴(`createChart` + `addSeries(LineSeries)` + `setData`) 채택
+- 조합 루트 런타임 분기: `isTauri()`(`@tauri-apps/api/core`)로 Tauri에서는 SqliteCandleRepository, 브라우저 프리뷰(Playwright 검증용)에서는 InMemoryCandleRepository 주입 (D-013)
 
 ## 열린 문제
 
 - `docs/OPEN_QUESTIONS.md` 참조 (OQ-002·OQ-007은 RESOLVED)
 - GitHub 원격 저장소가 아직 없어 CI 미구성 (D-008)
+- M5 남은 위험: "캐시 손상"·"라이선스/인증 설정 필요" 오류 문구는 현재 Binance 공개 데이터 경로로 재현 불가라 매핑하지 않음(추후 Provider 추가 시 재검토). 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음)
 
 ## 다음 작업
 
-1. `prompts/06_M5_UI.md` 수행 (MVP UI — 설정 → 재생 → 결과 흐름, 두 자산 비교, frontend-design Skill 시각 검토)
+1. M6 — Crypto Alpha Desktop Release: Windows 설치 파일 검증, 세션 저장·불러오기, CSV/JSON 내보내기, 새 환경 설치 테스트, GitHub Release 초안

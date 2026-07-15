@@ -124,6 +124,19 @@
 - 결과: OQ-007 RESOLVED. `src/domain/simulation/`, docs/16 §4
 - 재검토 조건: 사용자 피드백으로 단위가치 MDD 수요가 확인될 때
 
+## D-013: 차트 라이브러리와 조합 루트 런타임 분기
+
+- 상태: Accepted
+- 맥락: M5. docs/01 §1이 "Lightweight Charts 우선 검토"를 권장했으나 확정은 아니었음. UI를 처음으로 실제 데이터·SQLite·네트워크에 연결하며, Playwright 검증은 `npm run tauri dev`가 아니라 `npm run dev`(순수 브라우저)로 이루어져 Tauri IPC(`@tauri-apps/plugin-sql`)를 쓸 수 없다는 제약이 드러남
+- 선택:
+  - 차트: **TradingView Lightweight Charts v5** (`npm install lightweight-charts`). 공식 React 튜토리얼 확인 후 `createChart` + `chart.addSeries(LineSeries, options)` + `series.setData()` 패턴 채택. `TradingDate`("YYYY-MM-DD") 문자열을 `Time` 타입에 그대로 사용 가능함을 타입 선언에서 확인
+  - HTTP: 실제로 `data-api.binance.vision`에 curl로 요청해 `Access-Control-Allow-Origin: *` 응답을 확인 — 브라우저/webview `fetch` 그대로 사용 가능해 Tauri HTTP 플러그인 도입은 불필요. 기존 `fetchHttpClient`(M2) 유지
+  - 캐시 저장소: 조합 루트(`src/app/composition.ts`)가 `isTauri()`(`@tauri-apps/api/core`)로 분기 — Tauri 런타임은 `SqliteCandleRepository`(M2, 영속), 브라우저 프리뷰는 신규 `InMemoryCandleRepository`(영속성 없음, Playwright 검증 전용 경로)
+- 대안: 차트 — Recharts/visx(SVG 기반, 대량 시계열에서 캔버스보다 불리); HTTP — `@tauri-apps/plugin-http` 상시 도입(CORS가 실제로 열려 있어 불필요한 복잡도); 캐시 — 브라우저에서도 IndexedDB 등 영속 저장(M5 스코프 밖, Playwright 검증만 필요하므로 과설계)
+- 이유: 세 선택 모두 실측(curl, 공식 문서, 타입 선언) 후 결정했고, 브라우저 프리뷰 경로는 실제 데스크톱 사용 경로가 아니므로 영속성을 갖추지 않아도 됨을 UI에 명시(`ReplayWorkspace`의 안내 문구)
+- 결과: `src/app/composition.ts`, `src/infrastructure/persistence/inMemoryCandleRepository.ts`, `src/features/replay-workspace/LineSeriesChart.tsx`
+- 재검토 조건: Binance가 CORS 정책을 변경하거나, 브라우저 프리뷰에도 세션 간 캐시 영속이 필요하다는 요구가 생길 때
+
 ## 새 결정 템플릿
 
 ```text

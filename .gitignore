@@ -19,3 +19,6 @@ Thumbs.db
 *.log
 .env
 .env.*
+
+# Playwright MCP scratch snapshots
+.playwright-mcp/
