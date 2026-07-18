@@ -4,13 +4,24 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M6 — Crypto Alpha Desktop Release
+- 현재 마일스톤: M7 — 미국 주식 Provider
 - 상태: DONE
 - 마지막 갱신: 2026-07-19
 
 ## 완료된 마일스톤
 
-- M6 — Crypto Alpha Desktop Release (2026-07-19)
+- M7 — 미국 주식 Provider (2026-07-19)
+  - OQ-004 RESOLVED(D-015): 조사 결과 검토한 모든 무료 API(Alpha Vantage·Tiingo·Twelve Data·Financial Modeling Prep)가 "본인 이용"과 "앱의 불특정 최종사용자에게 재배포"를 구분하고 후자는 유료 계약을 요구함 확인 → **BYOK(Bring-Your-Own-Key)** 채택: 앱은 데이터를 재배포하지 않고 각 사용자가 자신의 무료 키를 직접 입력
+  - Provider: **Tiingo**(`GET /tiingo/daily/<ticker>/prices`) — 무료 티어에서 원시 OHLC와 수정주가(adjClose 등)를 함께 제공하는 유일한 후보였음(D-015 근거 상세)
+  - `src/application/ports/apiKeyStore.ts` + `tauriApiKeyStore.ts`(Rust `keyring` crate → Windows 자격 증명 관리자)·`inMemoryApiKeyStore.ts`(브라우저 프리뷰): BYOK 키를 평문 SQLite가 아닌 OS 보안 저장소에 저장(docs/09 §2)
+  - `src/infrastructure/http/tauriHttpClient.ts` + `tauri-plugin-http`: Tiingo는 CORS 미지원(curl로 확인)이라 기존 webview `fetch`(`fetchHttpClient`)를 쓸 수 없음 — capability를 `https://api.tiingo.com/*`로만 스코프
+  - `src/infrastructure/providers/tiingo/`: `TiingoProvider`(BYOK 키 미설정·403은 신규 `ProviderAuthError`, 200+평문 할당량 초과 응답은 관찰 기반으로 `ProviderRateLimitError` 분류), `TIINGO_INSTRUMENTS`(대형주 5종 큐레이션 — 전체 종목 검색 UI는 범위 밖)
+  - **다중 Provider 조합**: `AppComposition.provider`(단일) → `providers: ReadonlyMap<providerId, MarketDataProvider>`로 확장, `prepareReplaySession`이 자산마다 `instrument.providerId`로 Provider를 조회 — 암호화폐+미국 주식을 한 세션(최대 2개 비교)에서 함께 선택 가능. 브라우저 프리뷰는 Tiingo를 등록하지 않음(CORS·플러그인 모두 불가, SQLite 영속성 없음과 같은 종류의 제약)
+  - `src/features/session-setup/ProviderApiKeyField.tsx`: BYOK 키 입력·저장·삭제 UI. `formatProviderError`가 `ProviderAuthError`를 docs/06 §6 "라이선스 또는 인증 설정 필요" 문구로 매핑(이전까지 재현 불가라 매핑하지 않았던 항목)
+  - `docs/providers/TIINGO.md`: 데이터 의미·엔드포인트·호출 제한·이용조건·정규화 규칙 기록(docs/09 §5)
+  - 검증: `npm run verify`(format/lint/typecheck/404 tests/cargo check) PASS, `npm run build` PASS. Tiingo 계약 테스트 20개(범위 절단·중복 제거·OHLC 위반·BYOK 인증·200+평문 할당량 초과·5xx 재시도·다른 Provider 자산 거부 등), `prepareReplaySession` 다중 Provider 테스트 추가
+  - 브라우저 프리뷰 스모크: Playwright MCP로 `npm run dev` 확인 — 크립토 카탈로그만 노출되고(Tiingo 미등록 설계대로) 콘솔 오류 없음(파비콘 404 제외)
+  - **미검증**: 실제 Tiingo 무료 키로 `npm run tauri dev`를 통한 종단 확인(암호화폐+미국 주식 혼합 세션, 수정주가 토글, BYOK 키 입력→저장→재생 전체 흐름) — 이 세션에는 실 API 키가 없어 수행하지 못함. 사용자가 실 키로 1회 확인 필요
   - `src/domain/session/`: `ReplaySessionRecord`(schema v1), 자산별 `SimulationConfig` 포함 `SavedSessionConfiguration`, 데이터 버전 추출(`extractDataVersions`), 세션 이름 검증. `exportFormat.ts`: 세션 JSON 페이로드, 자산별 출처·가정 헤더가 포함된 포트폴리오 CSV(호출측이 커서까지 자른 스냅샷만 받음 — R6 유지)
   - `src/application/ports/sessionRepository.ts`·`fileExporter.ts`·`idGenerator.ts`: 저장소·내보내기·ID 생성 포트. `saveReplaySession`·`loadReplaySession` use-case
   - `src/infrastructure/persistence/sqliteSessionRepository.ts`(Tauri, `replay_sessions` 테이블 마이그레이션 추가)·`inMemorySessionRepository.ts`(브라우저 프리뷰)
@@ -81,6 +92,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 투자 시뮬레이션 엔진: 일시투자·정기 정액매수(매주·매월), 수수료, 소수점 매수 허용/비허용, 휴장일 이월, 기여 원금·현금·수량·평가액·손익·수익률, 가격/총자산 두 기준 MDD
 - **UI 연결 완료(M5)**: 자산 1~2개 선택(서로 다른 투자 규칙 허용) → 데이터 조회 → 재생(재생/일시정지/한 단계/처음으로/속도, 키보드 지원) → 가격·투자금 차트 → 결과 요약까지 전체 흐름 동작. 로딩·오류·데이터 경고(상장 이전·중간 누락) 상태 포함
 - **세션 저장·불러오기, CSV/JSON 내보내기(M6)**: 세션(자산·기간·표시 기준·시뮬레이션 설정·재생 속도·데이터 버전)을 SQLite(Tauri)/메모리(브라우저 프리뷰)에 저장·불러오기, 현재 세션을 JSON으로, 포트폴리오 시계열을 CSV(출처·가정 헤더 포함)로 내보내기(Tauri 네이티브 저장 대화상자)
+- **미국 주식(M7, BYOK)**: Tiingo 대형주 5종(AAPL·MSFT·GOOGL·AMZN·NVDA) — 사용자가 자신의 무료 Tiingo API 키를 입력하면 암호화폐 자산과 함께(최대 2개 비교) 조회 가능. 키는 Windows 자격 증명 관리자에 저장. Tauri 데스크톱 런타임에서만 동작(브라우저 프리뷰는 크립토만)
 
 ## 검증 상태
 
@@ -89,15 +101,15 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 | Format | PASS | `npm run format:check` | 2026-07-19, Prettier 3.9 |
 | Lint | PASS | `npm run lint` | 2026-07-19, ESLint 10 flat config |
 | Typecheck | PASS | `npm run typecheck` | 2026-07-19, tsc strict |
-| Unit test | PASS | `npm run test` | 2026-07-19, Vitest 4 + jsdom, 371개 통과 + live 1개 skip |
-| Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
-| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, 2026-07-14 수동 1회 PASS 이후 재실행 안 함 |
-| Cargo check | PASS | `npm run check:rust` | 2026-07-19, `tauri-plugin-dialog` 추가 반영 |
-| npm audit | PASS | `npm audit --production` | 2026-07-19, 취약점 0건 |
-| Production build | PASS | `npm run build` | 2026-07-19, tsc + vite build |
-| Desktop build | PASS | `npm run tauri build` | 2026-07-19, `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성 |
-| 설치 테스트 | 부분 PASS | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19, 이 머신에서 1회 확인(창 제목 "CashOS", 정상 종료 후 완전 제거). MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증 — 관리자 권한 또는 별도 물리 머신에서 재확인 필요, 진짜 "신규 환경" 테스트는 아직 없음 |
-| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | M5 시점 확인(2026-07-15). M6 세션 저장·내보내기 흐름은 브라우저 실사용 검증 안 함(Tauri 대화상자 의존 기능이라 브라우저 프리뷰 경로에서는 다운로드 폴백만 사용) |
+| Unit test | PASS | `npm run test` | 2026-07-19, Vitest 4 + jsdom, 404개 통과 + live 1개 skip |
+| Integration test | PASS | `npm run test` | Provider 계약(Binance+Tiingo) + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
+| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, Binance 대상 2026-07-14 수동 1회 PASS 이후 재실행 안 함. Tiingo용 live smoke는 아직 없음(실 키 필요) |
+| Cargo check | PASS | `npm run check:rust` | 2026-07-19, `tauri-plugin-dialog`+`tauri-plugin-http`+`keyring` 추가 반영 |
+| npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함 |
+| Production build | PASS | `npm run build` | 2026-07-19, tsc + vite build (M7 변경 포함 재검증) |
+| Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`) 포함한 재빌드는 아직 안 함 — `cargo check`만 확인 |
+| 설치 테스트 | 부분 PASS (M6 시점) | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19(M6), 이 머신에서 1회 확인. MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증. M7 이후 재검증 안 함 |
+| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 2026-07-19: 설정 화면 로드, 크립토 카탈로그만 노출(Tiingo 미등록 설계대로), 콘솔 오류 없음(파비콘 404 제외) 확인. M6 세션 저장·내보내기, M7 Tiingo 데이터 조회(BYOK 키 입력→실 데이터→재생)는 Tauri 데스크톱 런타임이 필요해 브라우저 프리뷰로 검증 불가 — `npm run tauri dev` + 실 Tiingo 키로 사용자 확인 필요 |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
 
@@ -117,15 +129,19 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - MDD 정의와 비율 반올림: 가격 기준 MDD를 기본 제공하고 총자산 기준 MDD를 별도 표기, 비율은 소수 10자리 ROUND_HALF_UP (D-012, OQ-007 RESOLVED)
 - 차트 라이브러리: TradingView Lightweight Charts v5 (D-013). CORS 확인 완료(`data-api.binance.vision`이 `Access-Control-Allow-Origin: *` 응답), 공식 React 튜토리얼 패턴(`createChart` + `addSeries(LineSeries)` + `setData`) 채택
 - 조합 루트 런타임 분기: `isTauri()`(`@tauri-apps/api/core`)로 Tauri에서는 SqliteCandleRepository, 브라우저 프리뷰(Playwright 검증용)에서는 InMemoryCandleRepository 주입 (D-013)
+- 미국 주식 Provider: Tiingo, BYOK 모델 (D-015, OQ-004 RESOLVED). 키는 Rust `keyring` crate로 Windows 자격 증명 관리자에 저장. CORS 미지원이라 Tiingo 전용으로 `tauri-plugin-http` 도입(Binance는 기존 `fetchHttpClient` 유지)
+- 다중 Provider 조합: `AppComposition.providers`가 providerId → Provider 맵을 보관하고, `prepareReplaySession`이 자산마다 알맞은 Provider를 조회 (D-015) — 향후 한국 주식(M8) 추가도 같은 패턴 재사용 가능
 
 ## 열린 문제
 
-- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-007 RESOLVED)
+- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-004·OQ-007 RESOLVED)
 - GitHub 원격 저장소 생성됨(`Yeon-sik/CashOS.git`), CI 워크플로 자체는 아직 없음 (D-008)
-- M5 남은 위험: "캐시 손상"·"라이선스/인증 설정 필요" 오류 문구는 현재 Binance 공개 데이터 경로로 재현 불가라 매핑하지 않음(추후 Provider 추가 시 재검토). 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음)
-- M6 남은 위험: MSI(all-users) 설치는 관리자 권한 환경에서 미검증(이 세션은 비관리자 셸). 진짜 "신규 환경"(별도 물리·가상 머신) 설치 테스트는 아직 없음 — NSIS 설치는 이 개발 머신에서 1회 설치·실행·삭제만 확인. GitHub Release는 draft 상태로 유지 중이며 게시(publish)는 사용자 판단 필요
+- 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음, M5부터 이어지는 항목)
+- M6 남은 위험: MSI(all-users) 설치는 관리자 권한 환경에서 미검증(이 세션은 비관리자 셸). 진짜 "신규 환경"(별도 물리·가상 머신) 설치 테스트는 아직 없음. GitHub Release는 draft 상태로 유지 중이며 게시(publish)는 사용자 판단 필요
+- M7 남은 위험: (1) 실 Tiingo 키로 종단 검증 미실시 — 이 세션에 실 API 키가 없어 BYOK 키 입력→저장→암호화폐/미국 주식 혼합 세션→재생→수정주가 토글의 실제 데이터 흐름은 사용자가 `npm run tauri dev`로 1회 확인 필요. (2) Tiingo의 "HTTP 200 + 평문 할당량 초과 응답" 분류는 공식 문서가 아니라 관찰(GitHub 이슈)에 근거한 휴리스틱이라 문구가 바뀌면 갱신 필요. (3) M6 시점 `.msi`/`.exe`는 M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)을 포함해 재빌드되지 않음 — 다음 릴리스 전 `npm run tauri build` 재실행 필요
 
 ## 다음 작업
 
-1. M7 — 미국 주식 Provider 착수 가능(M6 게이트 종료)
-2. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, `v0.1.0-alpha` GitHub Release draft 검토 후 게시 여부 결정
+1. 실 Tiingo 무료 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 암호화폐+미국 주식 혼합 세션 → 수정주가 토글 → 재생)
+2. M8 — 한국 주식 Provider(OQ-005), 또는 M7 포함 재빌드 후 릴리스 갱신
+3. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, GitHub Release draft 게시 여부 결정
