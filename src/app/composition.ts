@@ -1,12 +1,18 @@
 import { isTauri } from "@tauri-apps/api/core";
 
 import type { CandleRepository } from "../application/ports/candleRepository";
+import type { FileExporter } from "../application/ports/fileExporter";
 import type { MarketDataProvider } from "../application/ports/marketDataProvider";
+import type { SessionRepository } from "../application/ports/sessionRepository";
 import { ReplayEngine } from "../domain/replay/replayEngine";
+import { browserFileExporter } from "../infrastructure/export/browserFileExporter";
+import { tauriFileExporter } from "../infrastructure/export/tauriFileExporter";
 import { fetchHttpClient } from "../infrastructure/http/httpClient";
 import { InMemoryCandleRepository } from "../infrastructure/persistence/inMemoryCandleRepository";
+import { InMemorySessionRepository } from "../infrastructure/persistence/inMemorySessionRepository";
 import { runMigrations } from "../infrastructure/persistence/migrationRunner";
 import { SqliteCandleRepository } from "../infrastructure/persistence/sqliteCandleRepository";
+import { SqliteSessionRepository } from "../infrastructure/persistence/sqliteSessionRepository";
 import { openTauriSqlDatabase } from "../infrastructure/persistence/tauriSqlDatabase";
 import { BinanceProvider } from "../infrastructure/providers/binance/binanceProvider";
 import { createTimeoutReplayScheduler } from "../infrastructure/timers/timeoutReplayScheduler";
@@ -16,18 +22,34 @@ export type AppRuntime = "tauri" | "browser-preview";
 export interface AppComposition {
   readonly provider: MarketDataProvider;
   readonly repository: CandleRepository;
+  readonly sessionRepository: SessionRepository;
+  readonly fileExporter: FileExporter;
   /** "browser-preview"면 캐시가 세션 종료 시 소실된다 (M5 §2, Playwright 검증 전용 경로). */
   readonly runtime: AppRuntime;
   buildReplayEngine(): ReplayEngine;
 }
 
-async function buildRepository(): Promise<{ repository: CandleRepository; runtime: AppRuntime }> {
+interface PersistenceBundle {
+  readonly repository: CandleRepository;
+  readonly sessionRepository: SessionRepository;
+  readonly runtime: AppRuntime;
+}
+
+async function buildPersistence(): Promise<PersistenceBundle> {
   if (isTauri()) {
     const db = await openTauriSqlDatabase();
     await runMigrations(db);
-    return { repository: new SqliteCandleRepository(db), runtime: "tauri" };
+    return {
+      repository: new SqliteCandleRepository(db),
+      sessionRepository: new SqliteSessionRepository(db),
+      runtime: "tauri",
+    };
   }
-  return { repository: new InMemoryCandleRepository(), runtime: "browser-preview" };
+  return {
+    repository: new InMemoryCandleRepository(),
+    sessionRepository: new InMemorySessionRepository(),
+    runtime: "browser-preview",
+  };
 }
 
 let composition: Promise<AppComposition> | null = null;
@@ -41,11 +63,13 @@ let composition: Promise<AppComposition> | null = null;
 export function getAppComposition(): Promise<AppComposition> {
   if (composition === null) {
     composition = (async () => {
-      const { repository, runtime } = await buildRepository();
+      const { repository, sessionRepository, runtime } = await buildPersistence();
       const provider = new BinanceProvider({ httpClient: fetchHttpClient });
       return {
         provider,
         repository,
+        sessionRepository,
+        fileExporter: runtime === "tauri" ? tauriFileExporter : browserFileExporter,
         runtime,
         buildReplayEngine: () => new ReplayEngine({ scheduler: createTimeoutReplayScheduler() }),
       };

@@ -90,6 +90,7 @@ type EngineStore = ReturnType<typeof createEngineStore>;
 export function useReplaySession(
   composition: AppComposition,
   request: PrepareReplaySessionRequest,
+  initialSpeed?: ReplaySpeed,
 ): UseReplaySessionResult {
   const [store] = useState<EngineStore>(createEngineStore);
 
@@ -101,12 +102,15 @@ export function useReplaySession(
     }
     const engine = composition.buildReplayEngine();
     engine.initialize(prepareState.result.dataset);
+    if (initialSpeed !== undefined) {
+      engine.setSpeed(initialSpeed);
+    }
     store.attach(engine);
     return () => {
       store.detach();
       engine.dispose();
     };
-  }, [composition, prepareState, store]);
+  }, [composition, prepareState, store, initialSpeed]);
 
   const replayState = useSyncExternalStore(store.subscribe, store.getSnapshot);
 

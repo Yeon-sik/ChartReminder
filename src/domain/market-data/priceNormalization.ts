@@ -8,6 +8,9 @@ import { DomainValidationError } from "../shared/errors";
 
 const HUNDRED = new DomainDecimal(100);
 
+/** 가격 차트 표시 기준. (docs/06 §4) */
+export type DisplayMode = "raw" | "normalized-100" | "cumulative-return";
+
 /**
  * 가격 배열을 첫 값 기준 100으로 정규화한다. (docs/06 §4 기본 표시 기준)
  *

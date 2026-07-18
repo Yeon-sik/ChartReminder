@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import "./App.css";
 import { getAppComposition, type AppComposition } from "./app/composition";
 import type { PrepareReplaySessionRequest } from "./application/use-cases/prepareReplaySession";
 import type { Instrument } from "./domain/instrument/instrument";
+import type { ReplaySpeed } from "./domain/replay/replayEngine";
 import { ReplayWorkspace } from "./features/replay-workspace/ReplayWorkspace";
 import type { DisplayMode } from "./features/replay-workspace/viewModel";
+import { SavedSessionsPanel } from "./features/session-setup/SavedSessionsPanel";
 import { SessionSetupForm } from "./features/session-setup/SessionSetupForm";
+import type { RestoredSession } from "./features/session-setup/sessionPersistenceModel";
 import { BINANCE_INSTRUMENTS } from "./infrastructure/providers/binance/binanceCatalog";
 
 interface Session {
@@ -14,6 +17,7 @@ interface Session {
   readonly request: PrepareReplaySessionRequest;
   readonly instrumentsById: Record<string, Instrument>;
   readonly displayMode: DisplayMode;
+  readonly replaySpeed?: ReplaySpeed;
 }
 
 function useAppComposition(): { composition: AppComposition | null; error: string | null } {
@@ -45,6 +49,10 @@ function App() {
   const { composition, error } = useAppComposition();
   const [session, setSession] = useState<Session | null>(null);
   const [nextSessionId, setNextSessionId] = useState(1);
+  const instrumentCatalogById = useMemo(
+    () => Object.fromEntries(BINANCE_INSTRUMENTS.map((instrument) => [instrument.id, instrument])),
+    [],
+  );
 
   function handleSessionSubmit(
     request: PrepareReplaySessionRequest,
@@ -52,6 +60,17 @@ function App() {
     displayMode: DisplayMode,
   ): void {
     setSession({ id: nextSessionId, request, instrumentsById, displayMode });
+    setNextSessionId((id) => id + 1);
+  }
+
+  function handleLoadSession(restored: RestoredSession): void {
+    setSession({
+      id: nextSessionId,
+      request: restored.request,
+      instrumentsById: restored.instrumentsById,
+      displayMode: restored.displayMode,
+      replaySpeed: restored.replaySpeed,
+    });
     setNextSessionId((id) => id + 1);
   }
 
@@ -73,17 +92,25 @@ function App() {
 
   if (session === null) {
     return (
-      <SessionSetupForm
-        availableInstruments={BINANCE_INSTRUMENTS}
-        defaultInstrument={BINANCE_INSTRUMENTS[0]}
-        onSubmit={handleSessionSubmit}
-      />
+      <>
+        <SavedSessionsPanel
+          composition={composition}
+          instrumentCatalogById={instrumentCatalogById}
+          onLoad={handleLoadSession}
+        />
+        <SessionSetupForm
+          availableInstruments={BINANCE_INSTRUMENTS}
+          defaultInstrument={BINANCE_INSTRUMENTS[0]}
+          onSubmit={handleSessionSubmit}
+        />
+      </>
     );
   }
 
   return (
     <ReplayWorkspace
       key={session.id}
+      initialSpeed={session.replaySpeed}
       composition={composition}
       request={session.request}
       instrumentsById={session.instrumentsById}

@@ -50,4 +50,21 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
       )`,
     ],
   },
+  {
+    version: 2,
+    description: "replay session storage",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS replay_sessions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        schema_version INTEGER NOT NULL,
+        configuration_json TEXT NOT NULL,
+        data_version_json TEXT,
+        created_at_utc_ms INTEGER NOT NULL,
+        updated_at_utc_ms INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_replay_sessions_updated_at
+        ON replay_sessions (updated_at_utc_ms DESC)`,
+    ],
+  },
 ];

@@ -11,7 +11,9 @@ import type { PrepareReplaySessionRequest } from "../../application/use-cases/pr
 import type { Instrument } from "../../domain/instrument/instrument";
 import type { Candle } from "../../domain/market-data/candle";
 import { ReplayEngine } from "../../domain/replay/replayEngine";
+import { browserFileExporter } from "../../infrastructure/export/browserFileExporter";
 import { InMemoryCandleRepository } from "../../infrastructure/persistence/inMemoryCandleRepository";
+import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
 import { FakeReplayScheduler } from "../../test/fakeReplayScheduler";
 import { ReplayWorkspace } from "./ReplayWorkspace";
 
@@ -90,6 +92,8 @@ function buildComposition(): AppComposition {
   return {
     provider: new FakeProvider(),
     repository: new InMemoryCandleRepository(),
+    sessionRepository: new InMemorySessionRepository(),
+    fileExporter: browserFileExporter,
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
   };

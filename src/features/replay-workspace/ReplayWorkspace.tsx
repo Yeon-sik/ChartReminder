@@ -14,6 +14,7 @@ import { PlaybackControls } from "./PlaybackControls";
 import { PortfolioChart } from "./PortfolioChart";
 import { PriceChart } from "./PriceChart";
 import { ResultSummary } from "./ResultSummary";
+import { SessionActions } from "./SessionActions";
 import { useReplaySession } from "./useReplaySession";
 import {
   buildPortfolioSeries,
@@ -27,6 +28,8 @@ export interface ReplayWorkspaceProps {
   readonly request: PrepareReplaySessionRequest;
   readonly instrumentsById: Readonly<Record<string, Instrument>>;
   readonly displayMode: DisplayMode;
+  /** 저장된 세션을 불러올 때 재생 속도를 복원한다 (docs/07 §4). 새 세션이면 undefined. */
+  readonly initialSpeed?: ReplaySpeed;
   readonly onBackToSetup: () => void;
 }
 
@@ -35,9 +38,10 @@ export function ReplayWorkspace({
   request,
   instrumentsById,
   displayMode,
+  initialSpeed,
   onBackToSetup,
 }: ReplayWorkspaceProps) {
-  const session = useReplaySession(composition, request);
+  const session = useReplaySession(composition, request, initialSpeed);
 
   return (
     <div className="replay-workspace">
@@ -73,6 +77,8 @@ export function ReplayWorkspace({
         session.dataNoticesByInstrumentId !== null &&
         session.replayState !== null && (
           <ReadyWorkspace
+            composition={composition}
+            request={request}
             dataset={session.dataset}
             resultsByInstrumentId={session.resultsByInstrumentId}
             dataNoticesByInstrumentId={session.dataNoticesByInstrumentId}
@@ -94,6 +100,8 @@ export function ReplayWorkspace({
 }
 
 interface ReadyWorkspaceProps {
+  readonly composition: AppComposition;
+  readonly request: PrepareReplaySessionRequest;
   readonly dataset: ReplayDataset;
   readonly resultsByInstrumentId: Readonly<Record<string, SimulationResult>>;
   readonly dataNoticesByInstrumentId: Readonly<Record<string, AssetDataNotice>>;
@@ -111,6 +119,8 @@ interface ReadyWorkspaceProps {
 }
 
 function ReadyWorkspace({
+  composition,
+  request,
   dataset,
   resultsByInstrumentId,
   dataNoticesByInstrumentId,
@@ -175,6 +185,17 @@ function ReadyWorkspace({
         <h2>결과 요약</h2>
         <ResultSummary rows={summaryRows} dataNoticesByInstrumentId={dataNoticesByInstrumentId} />
       </section>
+
+      <SessionActions
+        composition={composition}
+        request={request}
+        instrumentsById={instrumentsById}
+        displayMode={displayMode}
+        speed={speed}
+        dataset={dataset}
+        resultsByInstrumentId={resultsByInstrumentId}
+        cursor={cursor}
+      />
     </>
   );
 }

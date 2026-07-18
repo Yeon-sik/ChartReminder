@@ -2,6 +2,7 @@ import type { Instrument } from "../../domain/instrument/instrument";
 import {
   cumulativeReturnRate,
   normalizeToBase100,
+  type DisplayMode,
 } from "../../domain/market-data/priceNormalization";
 import {
   parseDecimal,
@@ -23,7 +24,7 @@ import {
   type ValuationPrice,
 } from "../../domain/simulation/simulationTimeline";
 
-export type DisplayMode = "raw" | "normalized-100" | "cumulative-return";
+export type { DisplayMode };
 
 export interface ChartPoint {
   readonly time: TradingDate;
