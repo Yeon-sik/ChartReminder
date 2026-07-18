@@ -22,9 +22,10 @@
 
 ## OQ-004 미국 주식 데이터 공급자
 
-- 상태: OPEN
-- 기준: 수정주가, 과거 일봉 범위, 호출 제한, 상업·재배포 조건, 비용
-- M7 전까지 구현 확정 금지
+- 상태: RESOLVED (2026-07-19, D-015)
+- 결정: Tiingo, BYOK(Bring-Your-Own-Key) 모델 — 사용자가 자신의 무료 개인 키를 앱에 입력
+- 근거 요약(상세 조사는 D-015 참조): 검토한 모든 공급자(Alpha Vantage, Tiingo, Twelve Data, Financial Modeling Prep)가 "본인 자신의 이용"과 "앱이 불특정 최종사용자에게 데이터를 재배포"를 구분하며 후자는 유료·별도 계약을 요구함(docs/09 §5). BYOK로 각 사용자 본인의 개인 이용 범위 안에 들어오게 해 무료 티어로 합법적으로 운영
+- Tiingo 선택 이유: 무료 "Starter" 티어가 수정주가(adjOpen/High/Low/Close, splitFactor, divCash)를 원시가와 같은 응답에 포함 — 조사한 다른 공급자는 수정주가가 유료 전용이거나 확인 불가
 
 ## OQ-005 한국 주식 데이터 공급자와 공개 범위
 

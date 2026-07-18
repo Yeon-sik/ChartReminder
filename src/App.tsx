@@ -7,10 +7,15 @@ import type { Instrument } from "./domain/instrument/instrument";
 import type { ReplaySpeed } from "./domain/replay/replayEngine";
 import { ReplayWorkspace } from "./features/replay-workspace/ReplayWorkspace";
 import type { DisplayMode } from "./features/replay-workspace/viewModel";
+import { ProviderApiKeyField } from "./features/session-setup/ProviderApiKeyField";
 import { SavedSessionsPanel } from "./features/session-setup/SavedSessionsPanel";
 import { SessionSetupForm } from "./features/session-setup/SessionSetupForm";
 import type { RestoredSession } from "./features/session-setup/sessionPersistenceModel";
 import { BINANCE_INSTRUMENTS } from "./infrastructure/providers/binance/binanceCatalog";
+import {
+  TIINGO_INSTRUMENTS,
+  TIINGO_PROVIDER_ID,
+} from "./infrastructure/providers/tiingo/tiingoCatalog";
 
 interface Session {
   readonly id: number;
@@ -49,9 +54,14 @@ function App() {
   const { composition, error } = useAppComposition();
   const [session, setSession] = useState<Session | null>(null);
   const [nextSessionId, setNextSessionId] = useState(1);
+  const hasTiingo = composition?.providers.has(TIINGO_PROVIDER_ID) ?? false;
+  const availableInstruments = useMemo(
+    () => (hasTiingo ? [...BINANCE_INSTRUMENTS, ...TIINGO_INSTRUMENTS] : BINANCE_INSTRUMENTS),
+    [hasTiingo],
+  );
   const instrumentCatalogById = useMemo(
-    () => Object.fromEntries(BINANCE_INSTRUMENTS.map((instrument) => [instrument.id, instrument])),
-    [],
+    () => Object.fromEntries(availableInstruments.map((instrument) => [instrument.id, instrument])),
+    [availableInstruments],
   );
 
   function handleSessionSubmit(
@@ -98,9 +108,17 @@ function App() {
           instrumentCatalogById={instrumentCatalogById}
           onLoad={handleLoadSession}
         />
+        {hasTiingo && (
+          <ProviderApiKeyField
+            composition={composition}
+            providerId={TIINGO_PROVIDER_ID}
+            label="Tiingo(미국 주식) API 키"
+            signupUrl="tiingo.com"
+          />
+        )}
         <SessionSetupForm
-          availableInstruments={BINANCE_INSTRUMENTS}
-          defaultInstrument={BINANCE_INSTRUMENTS[0]}
+          availableInstruments={availableInstruments}
+          defaultInstrument={availableInstruments[0]}
           onSubmit={handleSessionSubmit}
         />
       </>

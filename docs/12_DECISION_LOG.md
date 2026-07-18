@@ -148,6 +148,23 @@
 - 결과: OQ-001 RESOLVED. 위 파일 목록에 반영, `docs/OPEN_QUESTIONS.md` 갱신
 - 재검토 조건: identifier 자체를 바꿔야 할 필요(예: 배포 채널 변경, 패키지명 충돌)가 생길 때
 
+## D-015: 미국 주식 Provider — Tiingo, BYOK, keyring, tauri-plugin-http
+
+- 상태: Accepted
+- 맥락: M7. OQ-004(미국 주식 데이터 공급자)를 확정해야 함. 공식 문서·ToS를 직접 확인한 결과(2026-07-19, WebSearch/WebFetch), 검토한 모든 공급자가 "본인 자신의 이용"과 "앱이 불특정 최종사용자에게 데이터를 재배포"를 구분하고 후자에는 유료·별도 계약을 요구해, 하나의 공용 키로 모든 사용자에게 데이터를 서빙하는 기존 방식(Binance, D-010)을 그대로 재사용할 수 없음이 드러남
+- 선택:
+  - **Provider**: Tiingo 공개 REST API(`GET /tiingo/daily/<ticker>/prices`). 무료 "Starter" 티어가 원시 OHLC와 수정주가(`adjOpen/High/Low/Close`, `splitFactor`, `divCash`)를 같은 응답에 포함 — 조사한 대안(Alpha Vantage: 수정주가 엔드포인트가 프리미엄 전용으로 전환됨; Twelve Data·Financial Modeling Prep: 재배포 시 유료 애드온 필요; Alpaca: 브로커리지 계정 개설 전제, 재배포 조건 불명확) 중 유일하게 무료 티어로 수정주가를 확인함
+  - **BYOK(Bring-Your-Own-Key)**: 앱은 Tiingo 데이터를 재배포하지 않는다 — 각 사용자가 Tiingo에 직접 가입해 발급받은 자신의 무료 키를 앱에 입력한다. Provider·Repository 등은 이 키를 저장·전송하지 않고, `ApiKeyStore` 포트로 로컬에만 보관한다
+  - **키 저장**: Rust `keyring` crate(v4, `windows-native-keyring-store` feature) → Windows 자격 증명 관리자. `docs/09 §2`가 요구하는 "OS 보안 저장소"의 실제 구현. `tauri-plugin-stronghold`(자체 볼트, 별도 비밀번호·salt 필요)보다 단일 문자열 저장에는 과함
+  - **HTTP 전송**: Tiingo는 CORS를 지원하지 않음(curl로 `Origin` 헤더를 보내도 `Access-Control-Allow-Origin` 미응답 확인) — 기존 webview `fetch`(`fetchHttpClient`, D-013)로는 호출 불가. 공식 `tauri-plugin-http`/`@tauri-apps/plugin-http`를 Tiingo 전용으로 추가하고, capability를 `https://api.tiingo.com/*`로만 스코프. Binance는 CORS가 열려 있어(D-013) 기존 `fetchHttpClient`를 그대로 유지
+  - **다중 Provider 조합**: `AppComposition.provider`(단일) → `providers: ReadonlyMap<providerId, MarketDataProvider>`로 확장하고, `prepareReplaySession`이 자산마다 `instrument.providerId`로 알맞은 Provider를 조회하도록 변경 — 암호화폐 자산과 미국 주식 자산을 한 세션(최대 2개 비교)에 함께 선택할 수 있게 됨. 브라우저 프리뷰(`isTauri() === false`)에는 Tiingo Provider를 등록하지 않음(CORS·플러그인 모두 브라우저 프리뷰에서 동작 불가 — SQLite 영속성이 없는 것과 같은 종류의 문서화된 제약, M5 §2)
+  - **오류 처리**: Tiingo는 계정 할당량 초과 시 문서화되지 않은 동작으로 HTTP 200과 평문(비-JSON) 본문을 반환하는 사례가 관찰됨(GitHub 이슈로 확인, Tiingo 공식 문서에는 명시 안 됨) — JSON 파싱 실패 시 본문에 할당량 관련 문구가 있으면 `ProviderRateLimitError`로, 아니면 `ProviderResponseError`로 분류. 키 미설정·403(잘못된 키)은 신규 `ProviderAuthError`로 구분해 UI가 docs/06 §6 "라이선스 또는 인증 설정 필요" 문구를 보여줌
+  - **자산 카탈로그**: 전체 Tiingo 종목이 아니라 대형주 5종(AAPL·MSFT·GOOGL·AMZN·NVDA)만 큐레이션 — 수천 종목 검색 UI는 M7 범위 밖
+- 대안: Alpha Vantage/Twelve Data/Financial Modeling Prep(위 사유로 기각), 유료 재배포 라이선스 계약(비용 발생, 사용자가 보류), `tauri-plugin-stronghold`(과설계)
+- 이유: BYOK는 이 앱의 재배포 없이 무료 티어를 합법적으로 쓸 수 있는 유일한 방법이며, `docs/09_SECURITY_AND_DATA_LICENSING.md` §2("향후 주식 공급자 연결 시 API 키·OAuth 토큰을 다룰 수 있다")와 `docs/06_UI_UX_SPEC.md` §6("라이선스 또는 인증 설정 필요")가 이미 이 상황을 예견하고 있었음
+- 결과: OQ-004 RESOLVED. `src/infrastructure/providers/tiingo/`, `src/infrastructure/security/`, `src/infrastructure/http/tauriHttpClient.ts`, `src/application/ports/apiKeyStore.ts`, `src/app/composition.ts`(다중 Provider), `src/features/session-setup/ProviderApiKeyField.tsx`, `docs/providers/TIINGO.md`
+- 재검토 조건: Tiingo 이용조건·요금제가 바뀌거나, 재배포 라이선스를 구매하기로 결정할 때, macOS/Linux 지원이 추가되어 `keyring` crate의 다른 백엔드 검증이 필요할 때
+
 ## 새 결정 템플릿
 
 ```text

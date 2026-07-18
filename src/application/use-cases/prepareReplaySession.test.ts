@@ -43,11 +43,25 @@ const ETH: Instrument = {
   providerSymbol: "ETHUSDT",
 };
 
+/** 2번째 Provider 소속 자산 — 서로 다른 Provider의 자산을 한 요청에 섞는 계약을 검증한다. */
+const AAPL: Instrument = {
+  id: "stock-aapl",
+  symbol: "AAPL",
+  displayName: "Apple Inc.",
+  assetClass: "stock",
+  market: "NASDAQ",
+  quoteCurrency: "USD",
+  exchangeTimezone: "America/New_York",
+  providerId: "fake-2",
+  providerSymbol: "aapl",
+  status: "active",
+};
+
 function tradingDate(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-function makeCandle(instrumentId: string, openTimeUtcMs: number): Candle {
+function makeCandle(providerId: string, instrumentId: string, openTimeUtcMs: number): Candle {
   return {
     instrumentId,
     interval: "1d",
@@ -60,7 +74,7 @@ function makeCandle(instrumentId: string, openTimeUtcMs: number): Candle {
     close: "100",
     quoteCurrency: "USDT",
     source: {
-      providerId: "fake",
+      providerId,
       providerSymbol: instrumentId,
       fetchedAtUtcMs: RANGE_END,
       priceBasis: "raw",
@@ -69,6 +83,7 @@ function makeCandle(instrumentId: string, openTimeUtcMs: number): Candle {
 }
 
 interface FakeProviderOptions {
+  readonly id?: string;
   /** instrumentId -> 이 시각 이전 캔들은 생성하지 않는다 (상장 전 시뮬레이션) */
   readonly listedFromMs?: Readonly<Record<string, number>>;
   /** instrumentId -> 이 openTimeUtcMs 집합은 캔들을 건너뛴다 (중간 누락 시뮬레이션) */
@@ -79,8 +94,10 @@ interface FakeProviderOptions {
 }
 
 class FakeProvider implements MarketDataProvider {
-  readonly id = "fake";
-  constructor(private readonly options: FakeProviderOptions = {}) {}
+  readonly id: string;
+  constructor(private readonly options: FakeProviderOptions = {}) {
+    this.id = options.id ?? "fake";
+  }
 
   searchInstruments(): Promise<Instrument[]> {
     return Promise.resolve([]);
@@ -107,7 +124,7 @@ class FakeProvider implements MarketDataProvider {
       if (ms < listedFromMs || skip.has(ms)) {
         continue;
       }
-      candles.push(makeCandle(instrumentId, ms));
+      candles.push(makeCandle(this.id, instrumentId, ms));
     }
     return Promise.resolve({
       providerId: this.id,
@@ -150,6 +167,13 @@ class InMemoryFakeRepository implements CandleRepository {
   }
 }
 
+/** providerId -> provider 맵으로 감싼다 (multi-provider composition, M7). */
+function providersOf(
+  ...providers: readonly MarketDataProvider[]
+): ReadonlyMap<string, MarketDataProvider> {
+  return new Map(providers.map((provider) => [provider.id, provider]));
+}
+
 function lumpSum(overrides: Partial<SimulationConfig> = {}): SimulationConfig {
   return {
     mode: "lump-sum",
@@ -168,7 +192,10 @@ function fullRange(): UtcTimeRange {
 
 describe("prepareReplaySession — 정상 경로", () => {
   it("단일 자산: 데이터셋과 시뮬레이션 결과를 만든다", async () => {
-    const deps = { provider: new FakeProvider(), repository: new InMemoryFakeRepository() };
+    const deps = {
+      providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
     const result = await prepareReplaySession(deps, {
       selections: [{ instrument: BTC, simulationConfig: lumpSum() }],
       range: fullRange(),
@@ -184,7 +211,10 @@ describe("prepareReplaySession — 정상 경로", () => {
   });
 
   it("2개 자산: 서로 다른 투자 규칙을 각자 적용한다", async () => {
-    const deps = { provider: new FakeProvider(), repository: new InMemoryFakeRepository() };
+    const deps = {
+      providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
     const selections: AssetSelection[] = [
       {
         instrument: BTC,
@@ -215,6 +245,26 @@ describe("prepareReplaySession — 정상 경로", () => {
       true,
     );
   });
+
+  it("서로 다른 Provider 소속 자산을 한 요청에서 함께 조회한다 (crypto + stock, M7)", async () => {
+    const deps = {
+      providers: providersOf(new FakeProvider(), new FakeProvider({ id: "fake-2" })),
+      repository: new InMemoryFakeRepository(),
+    };
+    const result = await prepareReplaySession(deps, {
+      selections: [
+        { instrument: BTC, simulationConfig: lumpSum() },
+        {
+          instrument: AAPL,
+          simulationConfig: lumpSum({ initialCash: { amount: "500", currency: "USDT" } }),
+        },
+      ],
+      range: fullRange(),
+    });
+
+    expect(Object.keys(result.resultsByInstrumentId)).toEqual([BTC.id, AAPL.id]);
+    expect(result.resultsByInstrumentId[AAPL.id].snapshots).toHaveLength(10);
+  });
 });
 
 describe("prepareReplaySession — 데이터 상태 판정", () => {
@@ -224,7 +274,7 @@ describe("prepareReplaySession — 데이터 상태 판정", () => {
   it("상장 이전 구간이 있으면 hasPreListingGap을 표시한다", async () => {
     const listedFromMs = RANGE_START + 5 * DAY_MS;
     const deps = {
-      provider: new FakeProvider({ listedFromMs: { [BTC.id]: listedFromMs } }),
+      providers: providersOf(new FakeProvider({ listedFromMs: { [BTC.id]: listedFromMs } })),
       repository: new InMemoryFakeRepository(),
     };
     const result = await prepareReplaySession(deps, {
@@ -243,7 +293,7 @@ describe("prepareReplaySession — 데이터 상태 판정", () => {
   it("중간에 캔들이 없으면 hasInteriorGap을 표시한다 (carried-forward)", async () => {
     const skipMs = RANGE_START + 5 * DAY_MS;
     const deps = {
-      provider: new FakeProvider({ skipOpenTimes: { [BTC.id]: [skipMs] } }),
+      providers: providersOf(new FakeProvider({ skipOpenTimes: { [BTC.id]: [skipMs] } })),
       repository: new InMemoryFakeRepository(),
     };
     const result = await prepareReplaySession(deps, {
@@ -260,7 +310,7 @@ describe("prepareReplaySession — 데이터 상태 판정", () => {
 
   it("한 자산에 데이터가 전혀 없어도 다른 자산은 정상 판정된다", async () => {
     const deps = {
-      provider: new FakeProvider({ noDataInstrumentIds: [ETH.id] }),
+      providers: providersOf(new FakeProvider({ noDataInstrumentIds: [ETH.id] })),
       repository: new InMemoryFakeRepository(),
     };
     const result = await prepareReplaySession(deps, {
@@ -278,14 +328,20 @@ describe("prepareReplaySession — 데이터 상태 판정", () => {
 
 describe("prepareReplaySession — 오류", () => {
   it("자산 0개를 거부한다", async () => {
-    const deps = { provider: new FakeProvider(), repository: new InMemoryFakeRepository() };
+    const deps = {
+      providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
     await expect(
       prepareReplaySession(deps, { selections: [], range: fullRange() }),
     ).rejects.toThrow(DomainValidationError);
   });
 
   it("자산 3개 이상을 거부한다", async () => {
-    const deps = { provider: new FakeProvider(), repository: new InMemoryFakeRepository() };
+    const deps = {
+      providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
     const third: Instrument = { ...BTC, id: "crypto-sol-usdt", symbol: "SOL/USDT" };
     await expect(
       prepareReplaySession(deps, {
@@ -300,7 +356,10 @@ describe("prepareReplaySession — 오류", () => {
   });
 
   it("같은 자산 중복 선택을 거부한다", async () => {
-    const deps = { provider: new FakeProvider(), repository: new InMemoryFakeRepository() };
+    const deps = {
+      providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
     await expect(
       prepareReplaySession(deps, {
         selections: [
@@ -314,7 +373,7 @@ describe("prepareReplaySession — 오류", () => {
 
   it("Provider 오류를 삼키지 않고 그대로 전파한다", async () => {
     const deps = {
-      provider: new FakeProvider({ failInstrumentIds: [BTC.id] }),
+      providers: providersOf(new FakeProvider({ failInstrumentIds: [BTC.id] })),
       repository: new InMemoryFakeRepository(),
     };
     await expect(
@@ -327,12 +386,26 @@ describe("prepareReplaySession — 오류", () => {
 
   it("요청 기간에 데이터가 전혀 없으면(단일 자산) 엔진이 빈 기간 오류를 던진다", async () => {
     const deps = {
-      provider: new FakeProvider({ noDataInstrumentIds: [BTC.id] }),
+      providers: providersOf(new FakeProvider({ noDataInstrumentIds: [BTC.id] })),
       repository: new InMemoryFakeRepository(),
     };
     await expect(
       prepareReplaySession(deps, {
         selections: [{ instrument: BTC, simulationConfig: lumpSum() }],
+        range: fullRange(),
+      }),
+    ).rejects.toThrow(DomainValidationError);
+  });
+
+  it("선택한 자산의 Provider가 등록되지 않았으면 명확한 오류를 던진다", async () => {
+    const deps = {
+      providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
+    const unregistered: Instrument = { ...BTC, providerId: "not-registered" };
+    await expect(
+      prepareReplaySession(deps, {
+        selections: [{ instrument: unregistered, simulationConfig: lumpSum() }],
         range: fullRange(),
       }),
     ).rejects.toThrow(DomainValidationError);

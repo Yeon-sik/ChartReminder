@@ -44,7 +44,8 @@ export interface PrepareReplaySessionResult {
 }
 
 export interface PrepareReplaySessionDeps {
-  readonly provider: MarketDataProvider;
+  /** providerId -> Provider. 자산마다 다른 Provider(암호화폐+주식 등)를 섞을 수 있다 (M7). */
+  readonly providers: ReadonlyMap<string, MarketDataProvider>;
   readonly repository: CandleRepository;
   readonly clock?: Clock;
 }
@@ -88,11 +89,16 @@ export async function prepareReplaySession(
 
   const series: CandleSeries[] = [];
   for (const selection of request.selections) {
-    const cached = await ensureCandleRangeCached(deps, {
-      instrument: selection.instrument,
-      interval: "1d",
-      range: request.range,
-    });
+    const provider = deps.providers.get(selection.instrument.providerId);
+    if (provider === undefined) {
+      throw new DomainValidationError(
+        `등록되지 않은 Provider다: ${selection.instrument.providerId} (${selection.instrument.id})`,
+      );
+    }
+    const cached = await ensureCandleRangeCached(
+      { provider, repository: deps.repository, clock: deps.clock },
+      { instrument: selection.instrument, interval: "1d", range: request.range },
+    );
     series.push({ instrumentId: selection.instrument.id, candles: cached.candles });
   }
 

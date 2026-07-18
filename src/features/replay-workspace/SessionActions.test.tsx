@@ -15,6 +15,7 @@ import { buildReplayDataset, type ReplayDataset } from "../../domain/replay/repl
 import { ReplayEngine } from "../../domain/replay/replayEngine";
 import { METRIC_LABELS, type SimulationResult } from "../../domain/simulation/simulationEngine";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
+import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
 import { FakeReplayScheduler } from "../../test/fakeReplayScheduler";
 import { SessionActions } from "./SessionActions";
 
@@ -132,12 +133,15 @@ function buildComposition(
   sessionRepository = new InMemorySessionRepository(),
 ): AppComposition {
   return {
-    provider: unusedProvider,
+    providers: new Map([[unusedProvider.id, unusedProvider]]),
     repository: unusedRepository,
     sessionRepository,
     fileExporter,
+    apiKeyStore: new InMemoryApiKeyStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
+    setApiKey: () => Promise.reject(new Error("not used by SessionActions")),
+    clearApiKey: () => Promise.reject(new Error("not used by SessionActions")),
   };
 }
 

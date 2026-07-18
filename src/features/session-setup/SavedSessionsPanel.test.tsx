@@ -10,6 +10,7 @@ import type { ReplaySessionRecord } from "../../domain/session/replaySession";
 import { ReplayEngine } from "../../domain/replay/replayEngine";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
 import { BINANCE_INSTRUMENTS } from "../../infrastructure/providers/binance/binanceCatalog";
+import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
 import { FakeReplayScheduler } from "../../test/fakeReplayScheduler";
 import { SavedSessionsPanel } from "./SavedSessionsPanel";
 
@@ -36,12 +37,15 @@ const unusedFileExporter: FileExporter = {
 
 function buildComposition(sessionRepository: InMemorySessionRepository): AppComposition {
   return {
-    provider: unusedProvider,
+    providers: new Map([[unusedProvider.id, unusedProvider]]),
     repository: unusedRepository,
     sessionRepository,
     fileExporter: unusedFileExporter,
+    apiKeyStore: new InMemoryApiKeyStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
+    setApiKey: () => Promise.reject(new Error("not used")),
+    clearApiKey: () => Promise.reject(new Error("not used")),
   };
 }
 

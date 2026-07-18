@@ -14,6 +14,7 @@ import { ReplayEngine } from "../../domain/replay/replayEngine";
 import { browserFileExporter } from "../../infrastructure/export/browserFileExporter";
 import { InMemoryCandleRepository } from "../../infrastructure/persistence/inMemoryCandleRepository";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
+import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
 import { FakeReplayScheduler } from "../../test/fakeReplayScheduler";
 import { ReplayWorkspace } from "./ReplayWorkspace";
 
@@ -89,13 +90,17 @@ class FakeProvider implements MarketDataProvider {
 }
 
 function buildComposition(): AppComposition {
+  const provider = new FakeProvider();
   return {
-    provider: new FakeProvider(),
+    providers: new Map([[provider.id, provider]]),
     repository: new InMemoryCandleRepository(),
     sessionRepository: new InMemorySessionRepository(),
     fileExporter: browserFileExporter,
+    apiKeyStore: new InMemoryApiKeyStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
+    setApiKey: () => Promise.reject(new Error("not used")),
+    clearApiKey: () => Promise.reject(new Error("not used")),
   };
 }
 

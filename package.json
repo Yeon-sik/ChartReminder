@@ -19,6 +19,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "decimal.js": "^10.6.0",
     "lightweight-charts": "^5.2.0",

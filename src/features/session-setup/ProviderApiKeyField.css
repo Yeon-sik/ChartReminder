@@ -1,0 +1,61 @@
+.provider-api-key {
+  max-width: 40rem;
+  margin: var(--space-4) auto 0;
+  padding: var(--space-3) 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.provider-api-key__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.provider-api-key__status {
+  margin: 0;
+  font-weight: 500;
+}
+
+.provider-api-key__status--ok {
+  color: var(--color-gain);
+}
+
+.provider-api-key__status--missing {
+  color: var(--color-text-muted);
+}
+
+.provider-api-key__input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.provider-api-key__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.provider-api-key__actions button {
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.provider-api-key__actions button:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.provider-api-key__actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

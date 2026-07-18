@@ -42,6 +42,19 @@ export class ProviderRateLimitError extends MarketDataProviderError {
   }
 }
 
+/**
+ * BYOK 인증 실패 또는 미설정. (D-015)
+ *
+ * kind는 "provider"를 재사용한다 — 사용자 요청/설정 오류라는 점에서 다른 4xx와 같지만,
+ * UI는 이 클래스로 구분해 docs/06 §6 "라이선스 또는 인증 설정 필요" 메시지를 보여준다.
+ */
+export class ProviderAuthError extends MarketDataProviderError {
+  constructor(providerId: string, message: string) {
+    super("provider", providerId, message);
+    this.name = "ProviderAuthError";
+  }
+}
+
 export class ProviderResponseError extends MarketDataProviderError {
   readonly issues: readonly string[];
 

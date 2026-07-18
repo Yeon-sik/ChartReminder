@@ -3,6 +3,7 @@ import { DomainValidationError } from "../../domain/shared/errors";
 import type { Money } from "../../domain/shared/money";
 import {
   MarketDataProviderError,
+  ProviderAuthError,
   ProviderNetworkError,
   ProviderRateLimitError,
   ProviderResponseError,
@@ -45,10 +46,14 @@ export function formatDataNotice(notice: AssetDataNotice): string | null {
 /**
  * Provider·도메인 오류를 사용자 문구로 변환한다. (docs/06 §6)
  *
- * "캐시 손상", "라이선스/인증 설정 필요"는 현재 Binance 공개 데이터 경로로 재현할 수
- * 없어 매핑하지 않는다 (PROJECT_STATE 남은 위험에 기록). 기술 스택 트레이스는 노출하지 않는다.
+ * "캐시 손상"은 현재 재현할 수 없어 매핑하지 않는다 (PROJECT_STATE 남은 위험에 기록).
+ * "라이선스 또는 인증 설정 필요"는 BYOK Provider(Tiingo 등)의 `ProviderAuthError`로
+ * 재현된다 (D-015). 기술 스택 트레이스는 노출하지 않는다.
  */
 export function formatProviderError(error: unknown): string {
+  if (error instanceof ProviderAuthError) {
+    return `라이선스 또는 인증 설정이 필요합니다: ${error.message}`;
+  }
   if (error instanceof ProviderRateLimitError) {
     return error.banned
       ? "요청이 일시적으로 차단되었습니다(공급자 rate limit). 잠시 후 다시 시도해 주세요."

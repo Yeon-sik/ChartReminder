@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DomainValidationError } from "../../domain/shared/errors";
 import {
   MarketDataProviderError,
+  ProviderAuthError,
   ProviderNetworkError,
   ProviderRateLimitError,
   ProviderResponseError,
@@ -109,6 +110,13 @@ describe("formatProviderError — docs/06 §6 서로 다른 문구", () => {
     );
     expect(message).not.toContain("stack");
     expect(message).not.toContain("line 42");
+  });
+
+  it("BYOK 인증 오류는 라이선스/인증 설정 안내 문구다 (docs/06 §6, D-015)", () => {
+    const message = formatProviderError(
+      new ProviderAuthError("tiingo", "Tiingo API 키가 설정되지 않았습니다."),
+    );
+    expect(message).toContain("라이선스 또는 인증 설정");
   });
 
   it("일반 provider 거부 오류를 처리한다", () => {
