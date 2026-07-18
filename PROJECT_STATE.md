@@ -4,12 +4,24 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M5 — MVP UI
+- 현재 마일스톤: M6 — Crypto Alpha Desktop Release
 - 상태: DONE
-- 마지막 갱신: 2026-07-15
+- 마지막 갱신: 2026-07-19
 
 ## 완료된 마일스톤
 
+- M6 — Crypto Alpha Desktop Release (2026-07-19)
+  - `src/domain/session/`: `ReplaySessionRecord`(schema v1), 자산별 `SimulationConfig` 포함 `SavedSessionConfiguration`, 데이터 버전 추출(`extractDataVersions`), 세션 이름 검증. `exportFormat.ts`: 세션 JSON 페이로드, 자산별 출처·가정 헤더가 포함된 포트폴리오 CSV(호출측이 커서까지 자른 스냅샷만 받음 — R6 유지)
+  - `src/application/ports/sessionRepository.ts`·`fileExporter.ts`·`idGenerator.ts`: 저장소·내보내기·ID 생성 포트. `saveReplaySession`·`loadReplaySession` use-case
+  - `src/infrastructure/persistence/sqliteSessionRepository.ts`(Tauri, `replay_sessions` 테이블 마이그레이션 추가)·`inMemorySessionRepository.ts`(브라우저 프리뷰)
+  - `src/infrastructure/export/tauriFileExporter.ts`: `@tauri-apps/plugin-dialog` 저장 대화상자로 경로를 받고, Rust `write_export_file` 커맨드(capability 우회 없이 사용자가 고른 경로 하나만 쓰기 — docs/09 §3)로 파일 기록. `browserFileExporter.ts`: 브라우저 프리뷰용 다운로드 폴백
+  - `src/features/replay-workspace/SessionActions.*`(현재 세션 저장·JSON/CSV 내보내기), `src/features/session-setup/SavedSessionsPanel.*`(저장된 세션 목록·불러오기)
+  - `src-tauri/src/lib.rs`·`capabilities/default.json`: `tauri-plugin-dialog` 등록, `dialog:allow-save` 권한, `write_export_file` 커맨드(capability 등록 불필요한 앱 자체 명령)
+  - D-014(신규)·OQ-001 RESOLVED: 표시명을 "CashOS"로 확정(창 제목, 앱 내 텍스트, 내보내기 헤더, README/GOAL 제목). Tauri identifier(`com.investmentreplay.dev`)·npm/Cargo 패키지명·SQLite 캐시 파일명은 설치 경로 단절을 피하기 위해 그대로 유지(D-007 연장)
+  - 검증: `npm run verify`(format/lint/typecheck/371 tests/cargo check) PASS, `npm audit --production` 취약점 0건, `npm run build` PASS, `npm run tauri build` PASS(`CashOS_0.1.0_x64_en-US.msi`, `CashOS_0.1.0_x64-setup.exe` 생성 — productName 반영 확인)
+  - 설치 검증: NSIS(`/S`) 설치 → 실행(창 제목 "CashOS" 확인, 프로세스 정상 유지) → `uninstall.exe /S`로 완전 제거까지 로컬 1회 확인. MSI는 이 세션의 비관리자 셸에서 all-users 설치 권한 부족(Error 1925)으로 실패 — 빌드 자체는 성공했고, 관리자 권한 환경에서 별도 확인 필요(진짜 "신규 환경" 설치 테스트는 아직 다른 물리 머신에서 미실시)
+  - GitHub Release 초안: `v0.1.0-alpha`, draft 상태, `feat/m6-alpha-release` 타겟, MSI·NSIS 설치 파일 첨부(https://github.com/Yeon-sik/CashOS/releases — draft이므로 링크는 `untagged-` placeholder로 표시되고 게시 시 `v0.1.0-alpha` 태그로 확정됨)
+  - 커밋: `9ac726e`(세션 저장·불러오기·내보내기), `14337c7`(CashOS 표시명 확정). 브랜치 `feat/m6-alpha-release` push 완료
 - M5 — MVP UI (2026-07-15)
   - `src/domain/market-data/priceNormalization.ts`: 시작점 100 정규화·누적 수익률 순수 함수(Decimal 경계)
   - `src/application/use-cases/prepareReplaySession.ts`: 자산 1~2개 선택 → 캐시 우선 조회 → 합집합 데이터셋 → 자산별(서로 다른 규칙 허용) 시뮬레이션 실행을 오케스트레이션. 상장 이전·데이터 없음·중간 누락을 엔진 재계산 없이 판정하는 `AssetDataNotice`
@@ -68,22 +80,24 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 리플레이 엔진: 합집합 타임라인, 재생·일시정지·스텝·seek·속도·restart, 가짜 시계 완전 결정론
 - 투자 시뮬레이션 엔진: 일시투자·정기 정액매수(매주·매월), 수수료, 소수점 매수 허용/비허용, 휴장일 이월, 기여 원금·현금·수량·평가액·손익·수익률, 가격/총자산 두 기준 MDD
 - **UI 연결 완료(M5)**: 자산 1~2개 선택(서로 다른 투자 규칙 허용) → 데이터 조회 → 재생(재생/일시정지/한 단계/처음으로/속도, 키보드 지원) → 가격·투자금 차트 → 결과 요약까지 전체 흐름 동작. 로딩·오류·데이터 경고(상장 이전·중간 누락) 상태 포함
-- 세션 저장·불러오기, CSV/JSON 내보내기: 미구현 (M6 예정)
+- **세션 저장·불러오기, CSV/JSON 내보내기(M6)**: 세션(자산·기간·표시 기준·시뮬레이션 설정·재생 속도·데이터 버전)을 SQLite(Tauri)/메모리(브라우저 프리뷰)에 저장·불러오기, 현재 세션을 JSON으로, 포트폴리오 시계열을 CSV(출처·가정 헤더 포함)로 내보내기(Tauri 네이티브 저장 대화상자)
 
 ## 검증 상태
 
 | 검증 | 상태 | 마지막 명령 | 비고 |
 |---|---|---|---|
-| Format | PASS | `npm run format:check` | Prettier 3.9, Markdown 문서는 제외 |
-| Lint | PASS | `npm run lint` | ESLint 10 flat config |
-| Typecheck | PASS | `npm run typecheck` | tsc strict |
-| Unit test | PASS | `npm run test` | Vitest 4 + jsdom, 338개 테스트 + live 1개 skip |
-| Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 포함 |
-| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, 2026-07-14 수동 1회 PASS |
-| Cargo check | PASS | `npm run check:rust` | M5, 2026-07-15 |
-| Production build | PASS | `npm run build` | tsc + vite build, 2026-07-15 |
-| Desktop build | PASS | `npm run tauri build` | MSI + NSIS 번들 생성 (M0, 2026-07-14; M5에서 재검증 안 함) |
-| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 실제 Binance 데이터로 설정→재생→2자산 비교 흐름 확인, 콘솔 오류 없음. Tauri 네이티브 통합은 대체하지 못함 |
+| Format | PASS | `npm run format:check` | 2026-07-19, Prettier 3.9 |
+| Lint | PASS | `npm run lint` | 2026-07-19, ESLint 10 flat config |
+| Typecheck | PASS | `npm run typecheck` | 2026-07-19, tsc strict |
+| Unit test | PASS | `npm run test` | 2026-07-19, Vitest 4 + jsdom, 371개 통과 + live 1개 skip |
+| Integration test | PASS | `npm run test` | Provider 계약 + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
+| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, 2026-07-14 수동 1회 PASS 이후 재실행 안 함 |
+| Cargo check | PASS | `npm run check:rust` | 2026-07-19, `tauri-plugin-dialog` 추가 반영 |
+| npm audit | PASS | `npm audit --production` | 2026-07-19, 취약점 0건 |
+| Production build | PASS | `npm run build` | 2026-07-19, tsc + vite build |
+| Desktop build | PASS | `npm run tauri build` | 2026-07-19, `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성 |
+| 설치 테스트 | 부분 PASS | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19, 이 머신에서 1회 확인(창 제목 "CashOS", 정상 종료 후 완전 제거). MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증 — 관리자 권한 또는 별도 물리 머신에서 재확인 필요, 진짜 "신규 환경" 테스트는 아직 없음 |
+| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | M5 시점 확인(2026-07-15). M6 세션 저장·내보내기 흐름은 브라우저 실사용 검증 안 함(Tauri 대화상자 의존 기능이라 브라우저 프리뷰 경로에서는 다운로드 폴백만 사용) |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
 
@@ -95,7 +109,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 핵심 계산: AI 미사용, 결정론적 계산
 - 저장: 로컬 우선
 - 패키지 매니저: npm (D-006)
-- 임시 identifier: `com.investmentreplay.dev` (D-007, OQ-001 확정 전까지)
+- 제품 표시명: CashOS (D-014, OQ-001 RESOLVED). Tauri identifier `com.investmentreplay.dev`·npm/Cargo 패키지명·SQLite 캐시 파일명은 설치 경로 단절을 피하기 위해 그대로 유지
 - 품질 도구: Prettier + ESLint + Vitest + cargo check, CI는 GitHub 원격 생성 후 (D-008)
 - Decimal 라이브러리: decimal.js 10.6.0, `src/domain/shared/decimal.ts`로 캡슐화 (D-009)
 - 암호화폐 공급자: Binance 공개 klines API, USDT 거래쌍, base URL `data-api.binance.vision` (D-010, OQ-003 RESOLVED)
@@ -106,10 +120,12 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 열린 문제
 
-- `docs/OPEN_QUESTIONS.md` 참조 (OQ-002·OQ-007은 RESOLVED)
-- GitHub 원격 저장소가 아직 없어 CI 미구성 (D-008)
+- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-007 RESOLVED)
+- GitHub 원격 저장소 생성됨(`Yeon-sik/CashOS.git`), CI 워크플로 자체는 아직 없음 (D-008)
 - M5 남은 위험: "캐시 손상"·"라이선스/인증 설정 필요" 오류 문구는 현재 Binance 공개 데이터 경로로 재현 불가라 매핑하지 않음(추후 Provider 추가 시 재검토). 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음)
+- M6 남은 위험: MSI(all-users) 설치는 관리자 권한 환경에서 미검증(이 세션은 비관리자 셸). 진짜 "신규 환경"(별도 물리·가상 머신) 설치 테스트는 아직 없음 — NSIS 설치는 이 개발 머신에서 1회 설치·실행·삭제만 확인. GitHub Release는 draft 상태로 유지 중이며 게시(publish)는 사용자 판단 필요
 
 ## 다음 작업
 
-1. M6 — Crypto Alpha Desktop Release: Windows 설치 파일 검증, 세션 저장·불러오기, CSV/JSON 내보내기, 새 환경 설치 테스트, GitHub Release 초안
+1. M7 — 미국 주식 Provider 착수 가능(M6 게이트 종료)
+2. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, `v0.1.0-alpha` GitHub Release draft 검토 후 게시 여부 결정
