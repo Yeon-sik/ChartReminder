@@ -137,6 +137,17 @@
 - 결과: `src/app/composition.ts`, `src/infrastructure/persistence/inMemoryCandleRepository.ts`, `src/features/replay-workspace/LineSeriesChart.tsx`
 - 재검토 조건: Binance가 CORS 정책을 변경하거나, 브라우저 프리뷰에도 세션 간 캐시 영속이 필요하다는 요구가 생길 때
 
+## D-014: 최종 제품 표시명 CashOS, identifier·패키지명 유지
+
+- 상태: Accepted
+- 맥락: M6. OQ-001(제품명)이 D-007 이후 계속 OPEN이었고, D-007은 늦어도 M6 첫 공개 배포 전 확정을 요구함. GitHub 원격 저장소가 `Yeon-sik/CashOS.git`으로 생성되어 있어 사용자에게 확인한 결과 "CashOS"가 최종 제품명으로 확정됨
+- 선택:
+  - 표시명(사용자에게 보이는 이름)을 "CashOS"로 확정 — `tauri.conf.json`의 `productName`·창 제목, `index.html` `<title>`, `src/app/appInfo.ts`의 `name`, 세션 설정 화면 제목, 세션 CSV 내보내기 헤더 주석, `README.md`·`GOAL.md` 제목에 반영
+  - Tauri `identifier`(`com.investmentreplay.dev`), npm 패키지명(`investment-replay`), Cargo 패키지명(`investment-replay` / `investment_replay_lib`), SQLite 캐시 DB 파일명(`investment-replay.db`)은 **변경하지 않음**
+- 이유: identifier·DB 파일명은 Tauri에서 사용자 로컬 앱 데이터 경로와 직결되고 한 번 배포되면 되돌리기 어렵다(D-007의 임시 identifier 도입 취지와 동일). 아직 공개 배포 전이라 위험은 낮지만, 표시명만 바꿔도 OQ-001의 실질 목적(사용자에게 보이는 제품명 확정)은 충족되므로 불필요한 재설치·경로 단절 위험을 감수하지 않음
+- 결과: OQ-001 RESOLVED. 위 파일 목록에 반영, `docs/OPEN_QUESTIONS.md` 갱신
+- 재검토 조건: identifier 자체를 바꿔야 할 필요(예: 배포 채널 변경, 패키지명 충돌)가 생길 때
+
 ## 새 결정 템플릿
 
 ```text

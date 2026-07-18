@@ -87,7 +87,7 @@ export function SessionSetupForm({
 
   return (
     <form className="session-setup" onSubmit={handleSubmit}>
-      <h1>Investment Replay 설정</h1>
+      <h1>CashOS 설정</h1>
       <p className="session-setup__hint">
         과거 시점으로 돌아가 자산 1~2개에 투자 규칙을 적용했을 때 자산 가치가 어떻게 변했는지
         재생합니다. 가격은 Binance BTC/ETH/SOL USDT 시장 가격 기준입니다.

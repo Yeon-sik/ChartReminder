@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "investment-replay",
+  "productName": "CashOS",
   "version": "0.1.0",
   "identifier": "com.investmentreplay.dev",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Investment Replay",
+        "title": "CashOS",
         "width": 900,
         "height": 640
       }

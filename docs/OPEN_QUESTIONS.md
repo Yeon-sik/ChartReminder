@@ -4,11 +4,9 @@
 
 ## OQ-001 제품명
 
-- 상태: OPEN
-- 임시명: Investment Replay
-- 영향: 앱 identifier, 패키지명, README, 디자인
-- M0에서는 안전한 임시 identifier를 사용하고 변경 가능성을 기록한다.
-- M0 진행 기록: identifier `com.investmentreplay.dev`, 패키지명 `investment-replay` 사용 중(D-007). 최종 제품명은 늦어도 M6 첫 공개 배포 전에 확정 필요.
+- 상태: RESOLVED (2026-07-19, D-014)
+- 결정: 표시명 "CashOS" (README, GOAL, 창 제목, 앱 내 표기, 내보내기 파일 헤더 전체 반영)
+- 유지: Tauri identifier `com.investmentreplay.dev`, npm 패키지명 `investment-replay`, Cargo 패키지명은 변경하지 않음(D-014 — 재설치·데이터 경로 단절 방지가 표시명 변경보다 우선)
 
 ## OQ-002 패키지 매니저
 

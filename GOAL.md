@@ -1,4 +1,4 @@
-# GOAL — Investment Replay
+# GOAL — CashOS
 
 ## 1. 제품 한 문장
 
