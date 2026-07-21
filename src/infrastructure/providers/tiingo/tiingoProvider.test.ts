@@ -283,16 +283,86 @@ describe("TiingoProvider 오류 분류와 재시도", () => {
   });
 });
 
-describe("TiingoProvider.searchInstruments", () => {
-  it("빈 질의는 전체 카탈로그를 반환한다", async () => {
-    const { provider } = makeProvider([]);
+describe("TiingoProvider.searchInstruments (D-021, 실 Tiingo Search API 응답 형태 기준)", () => {
+  it("빈 질의는 네트워크 요청 없이 큐레이션된 기본 목록을 반환한다", async () => {
+    const { provider, httpClient } = makeProvider([]);
     await expect(provider.searchInstruments("")).resolves.toHaveLength(TIINGO_INSTRUMENTS.length);
+    expect(httpClient.requestedUrls).toEqual([]);
   });
 
-  it("심볼·이름으로 검색한다", async () => {
-    const { provider } = makeProvider([]);
-    await expect(provider.searchInstruments("aapl")).resolves.toHaveLength(1);
-    await expect(provider.searchInstruments("Microsoft")).resolves.toHaveLength(1);
-    await expect(provider.searchInstruments("nope")).resolves.toHaveLength(0);
+  it("검색 API를 호출해 미국 주식만 정규화한다 (다른 국가 중복·ETF 제외)", async () => {
+    const { provider, httpClient } = makeProvider([
+      {
+        kind: "ok",
+        body: [
+          {
+            name: "Apple Inc",
+            ticker: "AAPL",
+            assetType: "Stock",
+            isActive: true,
+            countryCode: "CA",
+          },
+          {
+            name: "Apple Inc",
+            ticker: "AAPL",
+            assetType: "Stock",
+            isActive: true,
+            countryCode: "US",
+          },
+          {
+            name: "Apple Hospitality REIT",
+            ticker: "APLE",
+            assetType: "Stock",
+            isActive: true,
+            countryCode: "US",
+          },
+          {
+            name: "Some ETF",
+            ticker: "APLX",
+            assetType: "ETF",
+            isActive: true,
+            countryCode: "US",
+          },
+        ],
+      },
+    ]);
+
+    const results = await provider.searchInstruments("apple");
+
+    expect(results.map((r) => r.symbol)).toEqual(["AAPL", "APLE"]);
+    expect(results[0]).toMatchObject({
+      id: "stock-aapl",
+      providerId: "tiingo",
+      providerSymbol: "aapl",
+      quoteCurrency: "USD",
+      assetClass: "stock",
+      status: "active",
+    });
+    expect(httpClient.requestedUrls[0]).toContain("/tiingo/utilities/search?query=apple");
+    expect(httpClient.requestedHeaders[0]).toEqual({ Authorization: "Token test-key" });
+  });
+
+  it("isActive가 false면 status를 inactive로 매핑한다", async () => {
+    const { provider } = makeProvider([
+      {
+        kind: "ok",
+        body: [
+          { name: "Old Co", ticker: "OLD", assetType: "Stock", isActive: false, countryCode: "US" },
+        ],
+      },
+    ]);
+    const [result] = await provider.searchInstruments("old");
+    expect(result.status).toBe("inactive");
+  });
+
+  it("API 키가 없으면 네트워크 요청 없이 ProviderAuthError를 던진다", async () => {
+    const { provider, httpClient } = makeProvider([], { apiKey: null });
+    await expect(provider.searchInstruments("apple")).rejects.toThrow(ProviderAuthError);
+    expect(httpClient.requestedUrls).toEqual([]);
+  });
+
+  it("응답이 배열이 아니면 ProviderResponseError다", async () => {
+    const { provider } = makeProvider([{ kind: "ok", body: { error: "bad" } }]);
+    await expect(provider.searchInstruments("apple")).rejects.toThrow(ProviderResponseError);
   });
 });

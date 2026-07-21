@@ -20,6 +20,16 @@ docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-21 W
 - 응답: data.go.kr 표준 OpenAPI 봉투. `response.header.resultCode`/`resultMsg`, `response.body.totalCount`, `response.body.items.item`. 실측(2026-07-21)으로는 `totalCount=1`일 때도 `item`이 배열로 왔다 — 다만 다른 계정·응답 조건에서 단일 객체로 올 가능성을 배제할 수 없어 코드는 두 형태 모두 방어적으로 처리한다. 필드: `basDt`(YYYYMMDD), `srtnCd`(단축코드), `itmsNm`(종목명), `mkp`(시가), `hipr`(고가), `lopr`(저가), `clpr`(종가), `trqu`(거래량, 선택) — 실측 결과 이 숫자 필드들은 JSON 숫자가 아니라 **숫자 문자열**로 온다(예: `"clpr": "244000"`). `KrxPublicDataProvider`는 숫자·숫자 문자열을 모두 받아들인다
 - CORS 미지원(공공데이터포털 API 일반적으로 브라우저 직접 호출 시 CORS 오류가 나 서버/네이티브 프록시가 필요하다는 점이 다수 커뮤니티 자료로 확인됨) — Tiingo와 동일하게 `tauri-plugin-http` 기반 `tauriHttpClient`만 사용하며, 브라우저 프리뷰에는 이 Provider를 등록하지 않는다
 
+### 종목 검색 (D-021)
+
+- `GET https://apis.data.go.kr/1160100/service/GetKrxListedInfoService/getItemInfo` — **가격 조회와는 다른 서비스**("금융위원회_KRX상장종목정보")다. 같은 `serviceKey`라도 이 서비스를 공공데이터포털에서 별도로 "활용신청"하지 않았으면 쓸 수 없다
+- **실 키로 확인된 중요한 함정(2026-07-21)**: 가격 조회 서비스만 활용신청된 키로 이 검색 엔드포인트를 호출하면 JSON `resultCode` 오류가 아니라 **HTTP `403`과 평문 바디 `"Forbidden"`**이 온다(게이트웨이 단계 거부로 보임 — JSON을 만들어주는 백엔드까지 요청이 도달하지 않는다). `KrxPublicDataProvider`는 이 경우를 `ProviderAuthError`로 매핑하고 "이 오픈API가 활용신청되어 있는지 확인하라"는 안내를 포함한다. **이 앱을 쓰는 사용자가 검색 기능을 쓰려면 data.go.kr에서 "금융위원회_KRX상장종목정보"를 별도로 활용신청해야 한다**(가격 조회용 신청과 별개, 자동승인으로 보임 — 가격 서비스와 동일 페이지 구조)
+- 쿼리 파라미터: `serviceKey`, `resultType=json`, `numOfRows`, `pageNo`, `basDt`(YYYYMMDD, **필수** — 생략하면 전체 상장 이력이 수백만 건 반환될 수 있다는 경고가 커뮤니티 코드에 있음), `likeItmsNm`(종목명 부분검색)
+- `KrxPublicDataProvider`는 정확한 "가장 최근 거래일"을 계산하지 않고 `basDt`를 현재로부터 7일 전으로 고정한다 — 휴장일 처리를 피하는 단순화이며, 종목명·코드는 며칠 사이 거의 바뀌지 않는다는 전제다
+- 응답 필드: `itmsNm`(종목명), `corpNm`(법인명), `srtnCd`(단축코드), `crno`(법인등록번호), `mrktCtg`(시장구분) — 같은 data.go.kr 표준 봉투(`response.header/body`)를 재사용한다
+- **`srtnCd`에 "A" 접두사가 붙을 수 있다(가격 조회 API와 다름)** — 커뮤니티 소스 코드(`getkrxcode` 프로젝트)가 `srtnCd`에서 `^A`를 제거하는 것으로 보아 이 서비스의 코드 형식이 가격 서비스(순수 6자리 숫자, 실측 확인됨)와 다를 가능성이 있다. 이 앱은 `/^A\d{6}$/` 패턴이면 접두사를 제거하도록 방어적으로 처리했지만, **활용신청 문제로 이 서비스 자체를 실 키로 호출해 응답 형태를 직접 확인하지는 못했다** — 사용자가 활용신청 후 검색을 1회 사용해 봐야 최종 확인된다
+- 빈 질의는 네트워크 요청 없이 큐레이션된 대형주 5종(기존 목록)을 그대로 보여준다
+
 ## 호출 제한과 관찰된 동작
 
 - 개발계정: 일 10,000회. 운영계정은 활용사례 등록 신청 시 트래픽 증량 가능(공식 페이지 기준, 2026-07-21)
@@ -41,8 +51,8 @@ docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-21 W
 - 캐시: 사용자 로컬 SQLite에만 저장. 앱 바이너리에 데이터를 내장하지 않음
 - 출처 표시: UI와 내보내기 파일에 "한국거래소(공공데이터포털 경유)" 출처를 명시
 - API 키 저장: Windows 자격 증명 관리자(Rust `keyring` crate, Tiingo와 동일 경로 재사용) — 평문 SQLite·파일에 저장하지 않는다(D-015, D-016, docs/09 §2). 개발 편의로 저장소 루트 `.env`의 `OPEN_API_KEY`/`OPEN_API_ENDPOINT`가 있으면 자동 적용되지만, 이 값은 Rust 런타임에서만 읽고 배포 바이너리에는 포함되지 않는다(D-018)
-- 근거 문서: https://www.data.go.kr/data/15094808/openapi.do (서비스 개요·활용신청·트래픽), 공공데이터포털 공통 OpenAPI 오류 규격(플랫폼 전반에서 재사용되는 `resultCode` 표)
-- 공개 릴리스 게이트(docs/09 §6): BYOK 모델이라 이 앱의 상업적 재배포 권한 여부와 무관하게 동작. 성공 경로(엔드포인트·인증·응답 스키마·날짜 경계)는 실 서비스 키로 확인됨(2026-07-21, D-019). 오류 경로(`resultCode` 00 외)는 아직 미검증 — PROJECT_STATE 남은 위험 참고
+- 근거 문서: https://www.data.go.kr/data/15094808/openapi.do (가격 조회 서비스 개요·활용신청·트래픽), https://www.data.go.kr/data/15094775/openapi.do (종목 검색 서비스 "금융위원회_KRX상장종목정보"), 공공데이터포털 공통 OpenAPI 오류 규격(플랫폼 전반에서 재사용되는 `resultCode` 표)
+- 공개 릴리스 게이트(docs/09 §6): BYOK 모델이라 이 앱의 상업적 재배포 권한 여부와 무관하게 동작. 가격 조회 성공 경로(엔드포인트·인증·응답 스키마·날짜 경계)는 실 서비스 키로 확인됨(2026-07-19, D-019). 종목 검색 서비스는 이 세션에서 활용신청이 안 돼 있어 성공 응답을 직접 보지 못했다(D-021, 403 Forbidden만 확인) — 사용자가 활용신청 후 1회 확인 필요. 오류 경로(`resultCode` 00 외)는 아직 미검증 — PROJECT_STATE 남은 위험 참고
 
 ## 정규화 규칙
 

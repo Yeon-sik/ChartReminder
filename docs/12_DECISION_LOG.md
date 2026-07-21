@@ -244,6 +244,25 @@
 - 결과: `src/domain/shared/fxConversion.ts`, `src/application/ports/fxRateProvider.ts`(+`FxRateError`), `src/application/ports/appSettingsStore.ts`, `src/infrastructure/fx/frankfurterFxRateProvider.ts`, `src/infrastructure/persistence/{sqlite,inMemory}AppSettingsStore.ts`(+migrations.ts v3), `src/features/app-settings/SettingsScreen.tsx`, `src/features/session-setup/sessionSetupModel.ts`·`SessionSetupForm.tsx`(통합), `src/features/replay-workspace/viewModel.ts`·`ReplayWorkspace.tsx`(통화 환산 표시), `src/App.tsx`(탭 네비게이션), `src-tauri/tauri.conf.json`(창 높이)
 - 재검토 조건: KRW·USD·USDT 외 통화(예: 다른 주식 시장) 자산이 추가되면 `fxConversion.ts`의 지원 통화 목록·환율 소스를 확장해야 함. 과거 날짜별 환율이 필요해지는 요구가 생기면(예: 특정 리플레이 시점 기준 손익 재현) 별도 결정 필요
 
+## D-021: 종목 검색 지원(큐레이션 5종 한정 해제) — 암호화폐는 기존 유지
+
+- 상태: Accepted
+- 맥락: 사용자가 "비교 종목을 특정 종목으로 한정하지 않고 검색하는 기능"을 요청하되 "암호화폐는 기존 유지"를 명시함. M7/M8은 각각 Tiingo·공공데이터포털을 대형주 5종으로 큐레이션하고 "전체 종목 검색 UI는 범위 밖"이라 명시적으로 미뤄뒀었다(D-015, D-017) — 이번이 그 범위를 여는 작업이다. `MarketDataProvider.searchInstruments(query)` 포트는 M2부터 이미 존재했지만, 지금까지 모든 구현체가 작은 고정 배열을 필터링하는 자리표시자였다
+- 조사 결과(실 키로 확인, 2026-07-21):
+  - **Tiingo Search API**(`GET /tiingo/utilities/search?query=`)는 정상 동작 확인(curl). 공식 문서가 "early beta"라고 표시하지만 실제 응답은 안정적으로 옴. 같은 티커가 여러 국가로 중복 노출되어(`countryCode`) 필터링이 필요했음
+  - **공공데이터포털 종목 검색**("금융위원회_KRX상장종목정보", `GetKrxListedInfoService`)은 가격 조회("금융위원회_주식시세정보")와 **완전히 별개 서비스**다 — 같은 `serviceKey`라도 이 서비스를 data.go.kr에서 추가로 활용신청하지 않으면 `403 Forbidden`(JSON도 아닌 평문)이 온다. 이 세션에서 사용 중인 실 키는 가격 서비스만 신청돼 있어 이 발견을 했을 뿐 실제 검색 성공 응답은 확인하지 못했다 — **사용자가 별도로 활용신청해야 한다**
+  - 이 검색 API는 `basDt`(기준일)가 필수이고, 종목명 부분검색 파라미터는 `likeItmsNm`(가격 API의 `likeSrtnCd`와 이름은 다르지만 같은 LIKE 검색 패턴)이다
+- 선택:
+  - **크립토(Binance)는 그대로 둔다**(사용자 명시) — `BinanceProvider.searchInstruments`는 여전히 고정 3종(BTC/ETH/SOL)을 필터링만 한다. GOAL.md §4가 애초에 "암호화폐: BTC, ETH, SOL"로 못 박아 둔 제품 범위와 일치한다
+  - **Tiingo·공공데이터포털**: `searchInstruments`가 빈 질의면 기존 큐레이션 5종(기본 추천)을 그대로 반환하고, 실제 입력이 있으면 각 Provider의 실제 검색 엔드포인트를 호출한다. BYOK 키가 없으면 빈 질의는 여전히 동작(defaults만), 실제 검색은 `ProviderAuthError`
+  - **다중 Provider 통합 검색**: 새 유스케이스 `searchInstrumentsAcrossProviders`(`src/application/use-cases/searchInstruments.ts`)가 등록된 모든 Provider에 동시에 검색을 요청하고 `Promise.allSettled`로 결과를 합친다 — 한 Provider(예: 검색 서비스 미활용신청 상태의 공공데이터포털)가 실패해도 크립토·Tiingo 결과까지 막지 않는다. "먼저 시장을 고르고 검색"이 아니라 하나의 검색창에서 모든 provider를 한 번에 찾는 방식을 택했다(더 간단한 UX, provider 선택 단계 불필요)
+  - **UI**: `SessionSetupForm`의 자산별 `<select>` 드롭다운을 `InstrumentSearchField`(디바운스 300ms 콤보박스, `src/features/session-setup/`)로 교체. 결과를 `<button>` 목록으로 렌더링해 별도 ARIA combobox 구현 없이도 Tab/Enter 키보드 조작이 되게 했다(ui.md "키보드 접근")
+  - **세션 저장·불러오기 보정**: 검색으로 고른(큐레이션 밖) 자산을 저장한 세션은 기존 방식대로면 재로드 시 "카탈로그에서 찾을 수 없음" 오류가 났다 — `sessionPersistenceModel.ts`에 `buildCatalogForRecord`를 추가해, 저장된 자산이 기본 카탈로그에 없으면 해당 provider에 `providerSymbol`로 재검색해 보충한 뒤 기존 `restoreSessionFromRecord`를 호출한다
+- 대안: "시장 선택 후 검색"(provider별 탭/드롭다운 먼저 선택) — 통합 검색 하나가 더 간단하고 자연스러워 기각. 공공데이터포털 검색 미활용신청 상태를 자동 감지해 검색 UI 자체를 숨기는 방안 — 활용신청은 사용자가 아무 때나 할 수 있고 앱이 그 상태를 미리 알 방법이 없어(호출해봐야 안다) 기각, 대신 오류 메시지로 안내
+- 이유: 큐레이션 5종은 M7/M8 범위 축소를 위한 임시 조치였고(D-015/D-017에 이미 "전체 종목 검색 UI는 범위 밖"이라고 재검토 여지를 남겨둠), 실제 Provider들이 검색 API를 제공하는 이상 계속 5종으로 막아둘 이유가 없다. 크립토는 GOAL.md가 정한 제품 범위 자체라 이번 요청과 무관하게 유지
+- 결과: `src/application/use-cases/searchInstruments.ts`, `src/features/session-setup/InstrumentSearchField.{tsx,css}`, `src/infrastructure/providers/tiingo/tiingoProvider.ts`·`krxPublicData/krxPublicDataProvider.ts`(`searchInstruments` 재구현), `src/features/session-setup/sessionSetupModel.ts`·`SessionSetupForm.tsx`·`sessionPersistenceModel.ts`·`SavedSessionsPanel.tsx`, `docs/providers/TIINGO.md`·`KRX_PUBLIC_DATA.md`
+- 재검토 조건: 사용자가 공공데이터포털에서 "금융위원회_KRX상장종목정보"를 활용신청한 뒤 실제 검색 응답(특히 `srtnCd`의 "A" 접두사 여부)을 1회 확인 필요 — 가정과 다르면 `normalizeSearchResults` 수정. Tiingo Search API가 beta를 벗어나며 응답 스키마가 바뀌면 함께 갱신
+
 ## 새 결정 템플릿
 
 ```text

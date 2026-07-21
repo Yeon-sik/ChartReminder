@@ -16,6 +16,14 @@ docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-19 �
 - 응답: 날짜별 객체 배열. `date`(ISO), `open/high/low/close/volume`(원시, JSON 숫자), `adjOpen/adjHigh/adjLow/adjClose/adjVolume`(수정), `divCash`(배당), `splitFactor`(분할 비율)
 - CORS 미지원 확인(curl에 `Origin` 헤더를 보내도 `Access-Control-Allow-Origin` 미응답) — 브라우저/webview `fetch`로 호출 불가. `tauri-plugin-http` 기반 `tauriHttpClient`만 사용하며, 브라우저 프리뷰(`isTauri() === false`)에서는 이 Provider를 등록하지 않는다
 
+### 종목 검색 (D-021)
+
+- `GET https://api.tiingo.com/tiingo/utilities/search?query=<검색어>` — 같은 `Authorization: Token` 헤더 인증. 2026-07-21 실 키로 curl 확인(정상 동작)
+- 공식 문서(`https://www.tiingo.com/documentation/utilities/search`)가 "early beta"로 표시하고 있다 — 향후 응답 형태가 바뀔 수 있어 방어적으로 파싱한다(`normalizeSearchResults`, 알 수 없는 필드는 무시)
+- 응답: 래핑 없는 JSON 배열. 필드 `ticker`, `name`, `assetType`(`"Stock"`/`"ETF"`/`"Mutual Fund"`), `isActive`, `countryCode`. `exchange` 필드는 없다 — 검색 결과 `Instrument.market`은 큐레이션 목록과 달리 `"US"` 일반값을 쓴다
+- 같은 티커가 여러 `countryCode`로 중복될 수 있다(예: `AAPL`이 `US`·`CA` 둘 다) — 이 앱은 `countryCode === "US"`이고 `assetType === "Stock"`인 것만 남긴다(docs/00 범위: 미국 주식만)
+- 빈 질의는 네트워크 요청 없이 큐레이션된 대형주 5종(기존 목록)을 그대로 보여준다 — 검색은 실제 입력이 있을 때만 호출한다
+
 ## 호출 제한과 관찰된 동작
 
 - 무료 "Starter" 티어: 월 500 심볼, 시간당 50회, 일 1,000회, 월 1GB 대역폭 (2026-07-19 pricing 페이지 기준)

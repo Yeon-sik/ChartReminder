@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { getAppComposition, type AppComposition } from "./app/composition";
 import type { PrepareReplaySessionRequest } from "./application/use-cases/prepareReplaySession";
+import { searchInstrumentsAcrossProviders } from "./application/use-cases/searchInstruments";
 import type { Instrument } from "./domain/instrument/instrument";
 import type { DisplayCurrency, UsdKrwRate } from "./domain/shared/fxConversion";
 import type { ReplaySpeed } from "./domain/replay/replayEngine";
@@ -157,6 +158,12 @@ function App() {
     () => Object.fromEntries(availableInstruments.map((instrument) => [instrument.id, instrument])),
     [availableInstruments],
   );
+  // 검색 대상 provider 집합이 바뀔 때만 함수 정체성을 새로 만든다 — InstrumentSearchField의
+  // 디바운스 effect가 이 값을 의존성으로 쓰므로 매 렌더 재생성되면 안 된다.
+  const searchInstruments = useCallback(
+    (query: string) => searchInstrumentsAcrossProviders(composition?.providers ?? new Map(), query),
+    [composition],
+  );
 
   function handleSessionSubmit(
     request: PrepareReplaySessionRequest,
@@ -232,8 +239,9 @@ function App() {
               onLoad={handleLoadSession}
             />
             <SessionSetupForm
-              availableInstruments={availableInstruments}
+              quickDefaults={availableInstruments}
               defaultInstrument={availableInstruments[0]}
+              searchInstruments={searchInstruments}
               displayCurrency={displayCurrency}
               usdKrwRate={usdKrwRate}
               onSubmit={handleSessionSubmit}

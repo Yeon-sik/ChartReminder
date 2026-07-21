@@ -19,6 +19,10 @@
   gap: var(--space-3);
 }
 
+.session-setup__asset .instrument-search {
+  flex: 1;
+}
+
 .session-setup__asset label {
   flex: 1;
 }

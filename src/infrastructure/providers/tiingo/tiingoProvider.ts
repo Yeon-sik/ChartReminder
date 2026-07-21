@@ -22,6 +22,8 @@ const DAY_MS = 86_400_000;
 const DEFAULT_BASE_URL = "https://api.tiingo.com";
 /** 계정 할당량 초과 시 관찰된 문구(공식 문서에 명시되지 않음, docs/providers/TIINGO.md 참고). */
 const QUOTA_MESSAGE_HINTS = ["limit", "upgrade"];
+/** 자동완성 UI가 감당할 수 있는 상한 — Tiingo 검색은 많은 결과를 반환할 수 있다 (D-021). */
+const MAX_SEARCH_RESULTS = 20;
 
 export interface TiingoProviderOptions {
   readonly httpClient: HttpClient;
@@ -75,18 +77,77 @@ export class TiingoProvider implements MarketDataProvider {
     this.sleep = options.sleep ?? defaultSleep;
   }
 
-  searchInstruments(query: string): Promise<Instrument[]> {
-    const needle = query.trim().toLowerCase();
-    const matches =
-      needle === ""
-        ? [...TIINGO_INSTRUMENTS]
-        : TIINGO_INSTRUMENTS.filter(
-            (instrument) =>
-              instrument.symbol.toLowerCase().includes(needle) ||
-              instrument.displayName.toLowerCase().includes(needle) ||
-              instrument.providerSymbol.toLowerCase().includes(needle),
-          );
-    return Promise.resolve(matches);
+  /**
+   * 빈 질의는 큐레이션된 기본 목록(대형주 5종)을 보여주고, 실제 입력이 있으면 Tiingo
+   * 공식 Search API(`/tiingo/utilities/search`, 2026-07-21 curl로 실 키 확인)로 검색한다
+   * (D-021 — 비교 종목을 5종으로 한정하지 않고 전체 검색 지원).
+   */
+  async searchInstruments(query: string): Promise<Instrument[]> {
+    const needle = query.trim();
+    if (needle === "") {
+      return [...TIINGO_INSTRUMENTS];
+    }
+
+    const apiKey = this.getApiKey();
+    if (apiKey === null || apiKey.trim() === "") {
+      throw new ProviderAuthError(
+        this.id,
+        "Tiingo API 키가 설정되지 않았습니다. 설정에서 무료 키를 입력하세요.",
+      );
+    }
+
+    const url = `${this.baseUrl}/tiingo/utilities/search?query=${encodeURIComponent(needle)}`;
+    const parsed = await this.requestJsonWithRetry(url, apiKey);
+    return this.normalizeSearchResults(parsed);
+  }
+
+  private normalizeSearchResults(parsed: unknown): Instrument[] {
+    if (!Array.isArray(parsed)) {
+      throw new ProviderResponseError(this.id, "검색 응답이 배열이 아니다");
+    }
+
+    const seenProviderSymbols = new Set<string>();
+    const instruments: Instrument[] = [];
+
+    for (const raw of parsed) {
+      if (instruments.length >= MAX_SEARCH_RESULTS) {
+        break;
+      }
+      if (typeof raw !== "object" || raw === null) {
+        continue;
+      }
+      const record = raw as Record<string, unknown>;
+      // 이 앱은 미국 주식만 다룬다(docs/00) — 다른 국가 상장(중복 티커)·ETF/펀드는 제외한다.
+      if (record.countryCode !== "US" || record.assetType !== "Stock") {
+        continue;
+      }
+      const ticker = record.ticker;
+      const name = record.name;
+      if (typeof ticker !== "string" || ticker.trim() === "" || typeof name !== "string") {
+        continue;
+      }
+      const providerSymbol = ticker.toLowerCase();
+      if (seenProviderSymbols.has(providerSymbol)) {
+        continue;
+      }
+      seenProviderSymbols.add(providerSymbol);
+
+      instruments.push({
+        id: `stock-${providerSymbol}`,
+        symbol: ticker,
+        displayName: name,
+        assetClass: "stock",
+        // 검색 결과에는 거래소 필드가 없어 큐레이션 목록과 달리 일반값을 쓴다(D-021).
+        market: "US",
+        quoteCurrency: "USD",
+        exchangeTimezone: "America/New_York",
+        providerId: this.id,
+        providerSymbol,
+        status: record.isActive === false ? "inactive" : "active",
+      });
+    }
+
+    return instruments;
   }
 
   async getCandles(query: CandleQuery): Promise<ProviderCandleBatch> {

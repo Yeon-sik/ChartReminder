@@ -24,6 +24,21 @@ const DEFAULT_BASE_URL =
   "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService" + OPERATION_PATH;
 const ROWS_PER_PAGE = 500;
 const MAX_PAGES = 50;
+/**
+ * 종목명 검색 전용 엔드포인트(다른 서비스, D-021). 가격 조회(GetStockSecuritiesInfoService)와
+ * 별개로 공공데이터포털에서 "금융위원회_KRX상장종목정보"를 따로 활용신청해야 한다 — 실 키로
+ * 확인한 결과, 가격 서비스만 활용신청된 키로 이 엔드포인트를 호출하면 평문 "Forbidden"(HTTP
+ * 403)이 온다(JSON이 아니라 게이트웨이 단계 거부로 보임).
+ */
+const SEARCH_BASE_URL =
+  "https://apis.data.go.kr/1160100/service/GetKrxListedInfoService/getItemInfo";
+/** 자동완성 UI가 감당할 수 있는 상한. */
+const MAX_SEARCH_RESULTS = 20;
+/**
+ * 검색용 스냅샷 기준일 — 정확한 "가장 최근 거래일"을 계산하지 않고 7일 전으로 고정해
+ * 휴장일·공고 지연을 여유 있게 피한다(종목명·코드는 며칠 사이 거의 바뀌지 않는다, D-021).
+ */
+const SEARCH_BASDT_LOOKBACK_DAYS = 7;
 
 /**
  * `baseUrl` 오버라이드(.env `OPEN_API_ENDPOINT`, D-018)가 서비스 루트까지만 가리켜도
@@ -112,18 +127,79 @@ export class KrxPublicDataProvider implements MarketDataProvider {
     this.sleep = options.sleep ?? defaultSleep;
   }
 
-  searchInstruments(query: string): Promise<Instrument[]> {
-    const needle = query.trim().toLowerCase();
-    const matches =
-      needle === ""
-        ? [...KRX_PUBLIC_DATA_INSTRUMENTS]
-        : KRX_PUBLIC_DATA_INSTRUMENTS.filter(
-            (instrument) =>
-              instrument.symbol.toLowerCase().includes(needle) ||
-              instrument.displayName.toLowerCase().includes(needle) ||
-              instrument.providerSymbol.toLowerCase().includes(needle),
-          );
-    return Promise.resolve(matches);
+  /**
+   * 빈 질의는 큐레이션된 기본 목록(대형주 5종)을 보여주고, 실제 입력이 있으면
+   * "금융위원회_KRX상장종목정보"(`GetKrxListedInfoService`, `likeItmsNm` 종목명 부분검색)로
+   * 검색한다(D-021 — 비교 종목을 5종으로 한정하지 않고 전체 검색 지원). 이 서비스는
+   * `SEARCH_BASE_URL` 주석에 적은 대로 별도 활용신청이 필요할 수 있다.
+   */
+  async searchInstruments(query: string): Promise<Instrument[]> {
+    const needle = query.trim();
+    if (needle === "") {
+      return [...KRX_PUBLIC_DATA_INSTRUMENTS];
+    }
+
+    const apiKey = this.getApiKey();
+    if (apiKey === null || apiKey.trim() === "") {
+      throw new ProviderAuthError(
+        this.id,
+        "공공데이터포털 API 키가 설정되지 않았습니다. 설정에서 무료 키를 입력하세요.",
+      );
+    }
+
+    const basDt = toBasDt(
+      new Date(this.clock.nowUtcMs() - SEARCH_BASDT_LOOKBACK_DAYS * DAY_MS)
+        .toISOString()
+        .slice(0, 10),
+    );
+    const url =
+      `${SEARCH_BASE_URL}?serviceKey=${encodeURIComponent(apiKey)}` +
+      `&resultType=json&numOfRows=${MAX_SEARCH_RESULTS}&pageNo=1` +
+      `&basDt=${basDt}&likeItmsNm=${encodeURIComponent(needle)}`;
+
+    const { items } = await this.requestPageWithRetry(url);
+    return this.normalizeSearchResults(items);
+  }
+
+  private normalizeSearchResults(rows: readonly unknown[]): Instrument[] {
+    const seenCodes = new Set<string>();
+    const instruments: Instrument[] = [];
+
+    for (const row of rows) {
+      if (instruments.length >= MAX_SEARCH_RESULTS) {
+        break;
+      }
+      if (typeof row !== "object" || row === null) {
+        continue;
+      }
+      const record = row as Record<string, unknown>;
+      const name = record.itmsNm;
+      const rawCode = record.srtnCd;
+      if (typeof name !== "string" || typeof rawCode !== "string") {
+        continue;
+      }
+      // 이 API의 srtnCd는 "A"로 시작할 수 있다(가격 API와 다름, 실 키 미확인 — 방어적으로 처리).
+      const code = /^A\d{6}$/.test(rawCode) ? rawCode.slice(1) : rawCode;
+      if (!/^\d{6}$/.test(code) || seenCodes.has(code)) {
+        continue;
+      }
+      seenCodes.add(code);
+
+      instruments.push({
+        id: `stock-${code}`,
+        symbol: code,
+        displayName: name,
+        assetClass: "stock",
+        market: "KRX",
+        quoteCurrency: "KRW",
+        exchangeTimezone: "Asia/Seoul",
+        providerId: this.id,
+        providerSymbol: code,
+        status: "active",
+      });
+    }
+
+    return instruments;
   }
 
   async getCandles(query: CandleQuery): Promise<ProviderCandleBatch> {
@@ -263,6 +339,16 @@ export class KrxPublicDataProvider implements MarketDataProvider {
 
     if (response.status >= 500) {
       throw new ProviderNetworkError(this.id, `공공데이터포털 서버 오류 (HTTP ${response.status})`);
+    }
+    if (response.status === 403) {
+      // 실 키로 확인(D-021): 가격 조회는 되지만 검색(GetKrxListedInfoService)은 활용신청이
+      // 안 돼 있으면 JSON이 아니라 평문 "Forbidden"으로 즉시 거부된다 — resultCode를 볼 수
+      // 없는 게이트웨이 단계 거부라 여기서 바로 안내 문구로 매핑한다.
+      throw new ProviderAuthError(
+        this.id,
+        "공공데이터포털이 요청을 거부했습니다(403). 서비스 키를 확인하고, data.go.kr에서 이 오픈API " +
+          "(예: 금융위원회_KRX상장종목정보)가 활용신청되어 있는지 확인하세요.",
+      );
     }
     if (response.status !== 200) {
       throw new MarketDataProviderError(

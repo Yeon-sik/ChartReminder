@@ -389,18 +389,69 @@ describe("KrxPublicDataProvider 페이지네이션", () => {
   });
 });
 
-describe("KrxPublicDataProvider.searchInstruments", () => {
-  it("빈 질의는 전체 카탈로그를 반환한다", async () => {
-    const { provider } = makeProvider([]);
+describe("KrxPublicDataProvider.searchInstruments (D-021, GetKrxListedInfoService)", () => {
+  it("빈 질의는 네트워크 요청 없이 큐레이션된 기본 목록을 반환한다", async () => {
+    const { provider, httpClient } = makeProvider([]);
     await expect(provider.searchInstruments("")).resolves.toHaveLength(
       KRX_PUBLIC_DATA_INSTRUMENTS.length,
     );
+    expect(httpClient.requestedUrls).toEqual([]);
   });
 
-  it("심볼·이름으로 검색한다", async () => {
-    const { provider } = makeProvider([]);
-    await expect(provider.searchInstruments("005930")).resolves.toHaveLength(1);
-    await expect(provider.searchInstruments("삼성전자")).resolves.toHaveLength(1);
-    await expect(provider.searchInstruments("nope")).resolves.toHaveLength(0);
+  it("검색 API를 호출해 결과를 정규화한다 (srtnCd의 'A' 접두사 제거 포함)", async () => {
+    const { provider, httpClient } = makeProvider([
+      {
+        kind: "ok",
+        body: envelope([
+          { itmsNm: "삼성전자", srtnCd: "A005930" },
+          { itmsNm: "삼성전자우", srtnCd: "005935" },
+        ]),
+      },
+    ]);
+
+    const results = await provider.searchInstruments("삼성");
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "stock-005930",
+        symbol: "005930",
+        displayName: "삼성전자",
+        providerId: "krx-public-data",
+        providerSymbol: "005930",
+        quoteCurrency: "KRW",
+        market: "KRX",
+      }),
+      expect.objectContaining({ id: "stock-005935", symbol: "005935", displayName: "삼성전자우" }),
+    ]);
+    expect(httpClient.requestedUrls[0]).toContain(
+      "GetKrxListedInfoService/getItemInfo?serviceKey=test-key",
+    );
+    expect(httpClient.requestedUrls[0]).toContain("likeItmsNm=%EC%82%BC%EC%84%B1");
+  });
+
+  it("코드 형식이 아닌 srtnCd는 버린다", async () => {
+    const { provider } = makeProvider([
+      { kind: "ok", body: envelope([{ itmsNm: "이상함", srtnCd: "NOTCODE" }]) },
+    ]);
+    await expect(provider.searchInstruments("이상함")).resolves.toEqual([]);
+  });
+
+  it("resultCode 03(NODATA)은 오류가 아니라 빈 결과다", async () => {
+    const { provider } = makeProvider([{ kind: "ok", body: envelope([], { resultCode: "03" }) }]);
+    await expect(provider.searchInstruments("없는종목")).resolves.toEqual([]);
+  });
+
+  it("API 키가 없으면 네트워크 요청 없이 ProviderAuthError를 던진다", async () => {
+    const { provider, httpClient } = makeProvider([], { apiKey: null });
+    await expect(provider.searchInstruments("삼성")).rejects.toThrow(ProviderAuthError);
+    expect(httpClient.requestedUrls).toEqual([]);
+  });
+
+  it("HTTP 403(서비스 미활용신청 등)은 ProviderAuthError로 재시도 없이 실패한다", async () => {
+    const { provider, httpClient } = makeProvider([
+      { kind: "status", status: 403, body: "Forbidden" },
+    ]);
+    await expect(provider.searchInstruments("삼성")).rejects.toThrow(ProviderAuthError);
+    expect(httpClient.requestedUrls).toHaveLength(1);
   });
 });

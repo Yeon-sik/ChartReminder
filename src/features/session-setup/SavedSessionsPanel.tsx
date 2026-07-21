@@ -6,7 +6,11 @@ import { loadReplaySession } from "../../application/use-cases/loadReplaySession
 import type { Instrument } from "../../domain/instrument/instrument";
 import { formatProviderError } from "../replay-workspace/format";
 import "./SavedSessionsPanel.css";
-import { restoreSessionFromRecord, type RestoredSession } from "./sessionPersistenceModel";
+import {
+  buildCatalogForRecord,
+  restoreSessionFromRecord,
+  type RestoredSession,
+} from "./sessionPersistenceModel";
 
 export interface SavedSessionsPanelProps {
   readonly composition: AppComposition;
@@ -53,7 +57,13 @@ export function SavedSessionsPanel({
     setLoadError(null);
     try {
       const record = await loadReplaySession(composition.sessionRepository, id);
-      const restored = restoreSessionFromRecord(record, instrumentCatalogById);
+      // 검색으로 골랐던(큐레이션 기본값 밖) 자산도 재로드할 수 있게 보충한다 (D-021).
+      const catalog = await buildCatalogForRecord(
+        record,
+        instrumentCatalogById,
+        composition.providers,
+      );
+      const restored = restoreSessionFromRecord(record, catalog);
       onLoad(restored);
     } catch (error) {
       setLoadError(formatProviderError(error));

@@ -1,10 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 
+import type { InstrumentSearchResult } from "../../application/use-cases/searchInstruments";
 import type { PrepareReplaySessionRequest } from "../../application/use-cases/prepareReplaySession";
 import type { Instrument } from "../../domain/instrument/instrument";
 import { DomainValidationError } from "../../domain/shared/errors";
 import type { DisplayCurrency, UsdKrwRate } from "../../domain/shared/fxConversion";
 import type { DisplayMode } from "../replay-workspace/viewModel";
+import { InstrumentSearchField } from "./InstrumentSearchField";
 import "./SessionSetupForm.css";
 import {
   buildPrepareReplaySessionRequest,
@@ -15,8 +17,10 @@ import {
 } from "./sessionSetupModel";
 
 export interface SessionSetupFormProps {
-  readonly availableInstruments: readonly Instrument[];
   readonly defaultInstrument: Instrument;
+  /** "비교 자산 추가" 시 초기값으로 쓰는 소수의 기본 추천 — 검색 유니버스 전체가 아니다(D-021). */
+  readonly quickDefaults: readonly Instrument[];
+  readonly searchInstruments: (query: string) => Promise<InstrumentSearchResult>;
   readonly displayCurrency: DisplayCurrency;
   readonly usdKrwRate: UsdKrwRate | null;
   readonly onSubmit: (
@@ -35,8 +39,9 @@ const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
 const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 
 export function SessionSetupForm({
-  availableInstruments,
   defaultInstrument,
+  quickDefaults,
+  searchInstruments,
   displayCurrency,
   usdKrwRate,
   onSubmit,
@@ -50,7 +55,7 @@ export function SessionSetupForm({
     () => new Set(state.assets.map((instrument) => instrument.id)),
     [state.assets],
   );
-  const canAddAsset = state.assets.length < 2 && availableInstruments.length > state.assets.length;
+  const canAddAsset = state.assets.length < 2;
 
   function updateInvestment(patch: Partial<InvestmentSettingsFormState>): void {
     setState((prev) => ({ ...prev, investment: { ...prev.investment, ...patch } }));
@@ -64,7 +69,7 @@ export function SessionSetupForm({
   }
 
   function addAsset(): void {
-    const next = availableInstruments.find((instrument) => !selectedIds.has(instrument.id));
+    const next = quickDefaults.find((instrument) => !selectedIds.has(instrument.id));
     if (next === undefined) {
       return;
     }
@@ -149,30 +154,13 @@ export function SessionSetupForm({
         <legend>비교 자산</legend>
         {state.assets.map((instrument, index) => (
           <div key={instrument.id} className="session-setup__asset">
-            <label>
-              자산 {index + 1}
-              <select
-                value={instrument.id}
-                onChange={(event) => {
-                  const next = availableInstruments.find(
-                    (candidate) => candidate.id === event.target.value,
-                  );
-                  if (next !== undefined) {
-                    updateAsset(index, next);
-                  }
-                }}
-              >
-                {availableInstruments
-                  .filter(
-                    (candidate) => candidate.id === instrument.id || !selectedIds.has(candidate.id),
-                  )
-                  .map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.displayName} ({candidate.symbol})
-                    </option>
-                  ))}
-              </select>
-            </label>
+            <InstrumentSearchField
+              label={`자산 ${index + 1}`}
+              selected={instrument}
+              excludeIds={selectedIds}
+              search={searchInstruments}
+              onSelect={(next) => updateAsset(index, next)}
+            />
             {state.assets.length > 1 && (
               <button
                 type="button"

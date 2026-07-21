@@ -6,11 +6,15 @@ import { SessionSetupForm } from "./SessionSetupForm";
 
 const [BTC, ETH] = BINANCE_INSTRUMENTS;
 
+/** 이 파일의 테스트는 검색창에 직접 타이핑하지 않으므로 빈 결과 stub이면 충분하다. */
+const unusedSearch = () => Promise.resolve({ instruments: [], errorsByProviderId: {} });
+
 function renderForm(onSubmit = vi.fn()) {
   render(
     <SessionSetupForm
-      availableInstruments={BINANCE_INSTRUMENTS}
+      quickDefaults={BINANCE_INSTRUMENTS}
       defaultInstrument={BTC}
+      searchInstruments={unusedSearch}
       displayCurrency="USD"
       usdKrwRate={null}
       onSubmit={onSubmit}
