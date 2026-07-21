@@ -22,7 +22,14 @@ const DAY_MS = 86_400_000;
 const DEFAULT_BASE_URL = "https://api.tiingo.com";
 /** 계정 할당량 초과 시 관찰된 문구(공식 문서에 명시되지 않음, docs/providers/TIINGO.md 참고). */
 const QUOTA_MESSAGE_HINTS = ["limit", "upgrade"];
-/** 자동완성 UI가 감당할 수 있는 상한 — Tiingo 검색은 많은 결과를 반환할 수 있다 (D-021). */
+/**
+ * 자동완성 UI가 감당할 수 있는 상한(D-021). 실측 결과 Tiingo `/utilities/search`는
+ * 쿼리 폭과 무관하게 쿼리당 최대 10건만 반환한다(서버 측 제한, 이 앱 코드가 아님 — curl로
+ * "tech"·"bank"·"a" 등 넓은 질의로 확인). 이 상수는 그보다 크게 잡아도 사실상 무의미하지만,
+ * Tiingo가 향후 이 한도를 올리더라도 안전하게 동작하도록 남겨 둔다. 전체 티커 목록(zip
+ * 벌크 다운로드)으로 이 한도를 우회하는 방안도 검토했으나, 그 목록엔 회사명이 없어(티커만)
+ * 검색 결과 품질이 떨어지는 트레이드오프가 있어 사용자가 현재 방식 유지를 선택했다.
+ */
 const MAX_SEARCH_RESULTS = 20;
 
 export interface TiingoProviderOptions {

@@ -10,6 +10,11 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 완료된 마일스톤
 
+- D-022 — 검색 결과 수 조사·조정 (2026-07-21, D-021 직후 사용자 요청 "전체 주식 중에서 검색")
+  - 사용자가 검색 목록이 한정적이라고 지적 — 실측으로 원인을 Provider별로 분리해 확인함(자세한 근거는 D-022 참고)
+  - **Tiingo**: 원인이 이 앱 코드가 아니라 **Tiingo 서버 자체가 쿼리당 최대 10건으로 제한**(curl로 "tech"·"bank"·"a" 등 넓은 질의로 확인). 전체 커버리지를 하려면 Tiingo의 벌크 티커 목록(zip, 약 4.9만 US Stock 행)이 필요하지만 회사명이 없어 검색 품질이 떨어짐 — AskUserQuestion으로 확인한 결과 사용자가 **현재 방식(10건 제한) 유지**를 선택
+  - **공공데이터포털**: 원인이 이 앱이 스스로 건 `numOfRows=20` — API 자체 제한이 아니었음. **50으로 상향**해 사실상 전체 종목(약 2,600개) 커버
+  - 검증: `npm run verify`(482 tests) PASS, 상수 변경만이라 기존 테스트 그대로 통과
 - D-021 — 종목 검색 지원, 암호화폐는 기존 유지 (2026-07-21, 정식 마일스톤 번호 없음, D-020 직후 사용자 요청)
   - M7/M8에서 대형주 5종으로 큐레이션했던 Tiingo·공공데이터포털 자산 선택을 실제 검색으로 확장. Binance(암호화폐)는 사용자 명시 요청대로 BTC/ETH/SOL 고정 그대로 유지
   - `src/infrastructure/providers/tiingo/tiingoProvider.ts`: `searchInstruments`가 빈 질의는 큐레이션 5종, 실제 입력은 Tiingo 공식 Search API(`/tiingo/utilities/search`, 실 키로 curl 확인 — 문서상 "early beta")를 호출. 같은 티커의 타국 중복(`countryCode`)·ETF를 걸러 미국 주식만 남긴다
@@ -174,7 +179,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 한국 주식 Provider: 공공데이터포털(data.go.kr) "금융위원회_주식시세정보", BYOK 모델 (D-017, OQ-005 RESOLVED). Tiingo와 동일한 `tauriHttpClient`·keyring 저장 경로 재사용. 이 API는 수정주가를 제공하지 않음(원시 시세만). `endBasDt`는 배타적(exclusive) 경계다 — 흔한 문서 서술과 다름, 실측으로 확인(D-019)
 - BYOK 키 `.env` 자동 적용(개발 편의) (D-018): 저장소 루트 `.env`의 `TIINGO_API_KEY`/`OPEN_API_KEY`/`OPEN_API_ENDPOINT`가 있으면 Rust 런타임에서만 읽어 자동 적용하고, 없으면 기존 수동 입력(keyring 저장)으로 폴백. 프런트엔드 빌드에는 절대 포함되지 않아 배포 바이너리에 개인 키가 섞이지 않음
 - 통합 투자 설정 + 표시 통화·환율 변환 (D-020, OQ-006 RESOLVED): 비교 자산 전체에 동일한 투자 규칙(모드·금액·주기·수수료) 하나만 적용(자산별 설정 기능 제거). 표시 통화(KRW/USD)는 설정 탭에서 선택, 값은 표시/입력 경계에서만 환산(엔진·캐시는 항상 자산 고유 통화). FX Provider는 Frankfurter(무료·키 불필요·CORS 열림), USD/USDT는 1:1 가정
-- 종목 검색 (D-021): Tiingo·공공데이터포털은 큐레이션 5종 대신 각 Provider의 실제 검색 API를 쓴다(빈 질의만 큐레이션 기본값). 여러 Provider를 한 검색창에서 동시에 조회(`Promise.allSettled`로 부분 실패 허용). 암호화폐(Binance)는 BTC/ETH/SOL 고정 그대로 유지(GOAL.md 범위, 사용자 명시)
+- 종목 검색 (D-021, D-022): Tiingo·공공데이터포털은 큐레이션 5종 대신 각 Provider의 실제 검색 API를 쓴다(빈 질의만 큐레이션 기본값). 여러 Provider를 한 검색창에서 동시에 조회(`Promise.allSettled`로 부분 실패 허용). Tiingo는 쿼리당 최대 10건(Tiingo 서버 자체 제한, 회사명 없는 벌크 목록과의 트레이드오프로 현행 유지 선택), 공공데이터포털은 최대 50건(이 앱이 걸었던 제한을 상향, 사실상 전체 종목 커버). 암호화폐(Binance)는 BTC/ETH/SOL 고정 그대로 유지(GOAL.md 범위, 사용자 명시)
 
 ## 열린 문제
 

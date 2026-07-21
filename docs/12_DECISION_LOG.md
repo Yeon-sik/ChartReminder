@@ -263,6 +263,21 @@
 - 결과: `src/application/use-cases/searchInstruments.ts`, `src/features/session-setup/InstrumentSearchField.{tsx,css}`, `src/infrastructure/providers/tiingo/tiingoProvider.ts`·`krxPublicData/krxPublicDataProvider.ts`(`searchInstruments` 재구현), `src/features/session-setup/sessionSetupModel.ts`·`SessionSetupForm.tsx`·`sessionPersistenceModel.ts`·`SavedSessionsPanel.tsx`, `docs/providers/TIINGO.md`·`KRX_PUBLIC_DATA.md`
 - 재검토 조건: 사용자가 공공데이터포털에서 "금융위원회_KRX상장종목정보"를 활용신청한 뒤 실제 검색 응답(특히 `srtnCd`의 "A" 접두사 여부)을 1회 확인 필요 — 가정과 다르면 `normalizeSearchResults` 수정. Tiingo Search API가 beta를 벗어나며 응답 스키마가 바뀌면 함께 갱신
 
+## D-022: 검색 결과 수 — KRX 상한 상향, Tiingo는 서버 제한으로 현행 유지
+
+- 상태: Accepted
+- 맥락: D-021 배포 후 사용자가 "검색되는 주식 목록 수가 한정적"이라며 "전체 주식" 중에서 검색하게 해 달라고 요청. 실 키로 두 Provider를 각각 조사한 결과 원인이 서로 다름이 드러남
+- 조사 결과(실측, 2026-07-21):
+  - **Tiingo** `/utilities/search`는 쿼리 폭과 무관하게 서버 측에서 쿼리당 최대 10건만 반환한다 — curl로 "tech"·"bank"·"a" 등 매우 넓은 질의를 시도해도 항상 10건이었다. 이 앱의 `MAX_SEARCH_RESULTS`(20)는 애초에 이 한도보다 커서 아무 영향이 없었다 — 병목은 Tiingo 서버였다. 전체 커버리지를 원하면 Tiingo가 별도 제공하는 벌크 티커 목록(`supported_tickers.zip`, 약 10.7만 행·미국 Stock만 약 4.9만 건)을 함께 써야 하지만, 이 목록에는 `ticker`/`exchange`/`assetType`/`priceCurrency`/`startDate`/`endDate`만 있고 **회사명이 없다** — 실제로 내려받아 확인함(curl + unzip)
+  - **공공데이터포털 검색**(`GetKrxListedInfoService`)은 반대로 이 앱이 스스로 `numOfRows=20`을 걸어 뒀을 뿐이다 — API 자체의 제한이 아니다(가격 조회 서비스가 이미 `numOfRows=500`으로 페이지네이션하는 것과 같은 API 계열)
+- 선택:
+  - **Tiingo는 현재 방식 유지**(AskUserQuestion으로 확정) — 벌크 목록을 추가하면 새 의존성(zip 해제 라이브러리)과 "회사명 없는 검색 결과"라는 품질 저하 트레이드오프가 있어, 사용자가 기존 10건 제한을 그대로 받아들이기로 함
+  - **공공데이터포털은 `MAX_SEARCH_RESULTS`(=요청 `numOfRows`)를 20 → 50으로 상향** — KRX 전체 상장 종목이 약 2,600개뿐이라 이름 검색 결과가 50건을 넘는 경우는 드물어, 사실상 "전체 종목 중 검색"에 해당한다. 트레이드오프 없는 단순 상수 변경
+- 대안: Tiingo 벌크 티커 목록 추가 — 사용자가 명시적으로 기각(회사명 손실 트레이드오프)
+- 이유: 같은 증상("검색 목록이 한정적")이라도 원인이 Provider마다 다를 수 있어 실측으로 각각 확인하고 근거 없이 동일한 처방(상수 상향)을 두 곳에 다 적용하지 않았다 — Tiingo에 상수를 더 올려봤자 서버 한도 때문에 효과가 없었을 것이다
+- 결과: `src/infrastructure/providers/krxPublicData/krxPublicDataProvider.ts`(`MAX_SEARCH_RESULTS` 20→50 + 근거 주석), `src/infrastructure/providers/tiingo/tiingoProvider.ts`(현행 유지 근거를 주석으로 명시)
+- 재검토 조건: Tiingo가 향후 검색 결과 상한을 공식 문서화하거나 늘리면 재검토. 공공데이터포털도 활용신청 후 실제 검색 결과 건수를 확인하면(D-021 미검증 항목) 50이 충분한지 재확인 필요
+
 ## 새 결정 템플릿
 
 ```text

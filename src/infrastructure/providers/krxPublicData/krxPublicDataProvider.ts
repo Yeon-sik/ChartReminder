@@ -32,8 +32,16 @@ const MAX_PAGES = 50;
  */
 const SEARCH_BASE_URL =
   "https://apis.data.go.kr/1160100/service/GetKrxListedInfoService/getItemInfo";
-/** 자동완성 UI가 감당할 수 있는 상한. */
-const MAX_SEARCH_RESULTS = 20;
+/**
+ * 자동완성 UI가 감당할 수 있는 상한이자 API에 요청하는 `numOfRows`이기도 하다.
+ *
+ * 이전에는 20이었는데, 이건 이 API 자체의 제한이 아니라 코드에서 임의로 건 값이었다 —
+ * KRX 전체 상장 종목은 약 2,600개뿐이라 이름 검색 결과가 50건을 넘는 경우는 드물어서,
+ * 사실상 "전체 종목 중에서 검색"에 해당하도록 넉넉히 올렸다(D-021 후속). Tiingo 검색은
+ * 이 상수와 무관하게 Tiingo 서버가 자체적으로 쿼리당 최대 10건으로 제한한다(실측 확인,
+ * 사용자 요청에 따라 그대로 둔다) — `tiingoProvider.ts`의 같은 이름 상수는 별개다.
+ */
+const MAX_SEARCH_RESULTS = 50;
 /**
  * 검색용 스냅샷 기준일 — 정확한 "가장 최근 거래일"을 계산하지 않고 7일 전으로 고정해
  * 휴장일·공고 지연을 여유 있게 피한다(종목명·코드는 며칠 사이 거의 바뀌지 않는다, D-021).
