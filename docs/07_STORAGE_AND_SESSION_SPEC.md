@@ -53,6 +53,13 @@
 - created_at
 - updated_at
 
+### app_settings (D-020)
+
+- key
+- value
+
+표시 통화(KRW/USD) 등 비밀정보가 아닌 UI 선호값 key/value 한 행씩. BYOK 인증정보(`ApiKeyStore`, OS 보안 저장소)와는 저장 위치와 책임을 분리한다.
+
 ## 3. 마이그레이션
 
 - 스키마 변경은 버전 관리되는 마이그레이션으로 수행한다.

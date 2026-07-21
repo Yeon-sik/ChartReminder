@@ -47,6 +47,13 @@
   gap: var(--space-4);
 }
 
+.replay-workspace__currency-note {
+  margin: 0 0 var(--space-3);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .replay-workspace__notices {
   margin: 0;
   padding: var(--space-3) var(--space-4);

@@ -1,6 +1,7 @@
 import { parseDecimal, roundHalfUp, type DecimalString } from "../../domain/shared/decimal";
 import { DomainValidationError } from "../../domain/shared/errors";
 import type { Money } from "../../domain/shared/money";
+import { FxRateError } from "../../application/ports/fxRateProvider";
 import {
   MarketDataProviderError,
   ProviderAuthError,
@@ -51,6 +52,11 @@ export function formatDataNotice(notice: AssetDataNotice): string | null {
  * 재현된다 (D-015). 기술 스택 트레이스는 노출하지 않는다.
  */
 export function formatProviderError(error: unknown): string {
+  if (error instanceof FxRateError) {
+    return error.kind === "network"
+      ? "환율 정보를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요."
+      : "환율 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  }
   if (error instanceof ProviderAuthError) {
     return `라이선스 또는 인증 설정이 필요합니다: ${error.message}`;
   }

@@ -14,6 +14,8 @@ import type { Instrument } from "../../domain/instrument/instrument";
 import { buildReplayDataset, type ReplayDataset } from "../../domain/replay/replayDataset";
 import { ReplayEngine } from "../../domain/replay/replayEngine";
 import { METRIC_LABELS, type SimulationResult } from "../../domain/simulation/simulationEngine";
+import type { FxRateProvider } from "../../application/ports/fxRateProvider";
+import { InMemoryAppSettingsStore } from "../../infrastructure/persistence/inMemoryAppSettingsStore";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
 import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
 import { FakeReplayScheduler } from "../../test/fakeReplayScheduler";
@@ -138,6 +140,11 @@ function buildComposition(
     sessionRepository,
     fileExporter,
     apiKeyStore: new InMemoryApiKeyStore(),
+    envManagedProviderIds: new Set(),
+    fxRateProvider: {
+      getUsdKrwRate: () => Promise.reject(new Error("not used")),
+    } as FxRateProvider,
+    appSettingsStore: new InMemoryAppSettingsStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
     setApiKey: () => Promise.reject(new Error("not used by SessionActions")),

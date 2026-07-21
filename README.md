@@ -22,6 +22,20 @@ npm run format       # Prettier로 코드 정리
 npm run tauri build  # Windows 설치 파일 빌드
 ```
 
+## BYOK 개발 편의(.env)
+
+미국·한국 주식 Provider는 BYOK(Bring-Your-Own-Key)라 앱 화면에서 직접 키를 입력해야 한다.
+저장소 루트에 `.env`(Git에 커밋되지 않음)를 두면 개발 중 입력을 반복하지 않아도 된다 — 값이
+있으면 앱 화면의 수동 입력 UI를 건너뛰고 자동 적용되고, 없으면 기존과 동일하게 화면에서
+입력해 OS 자격 증명 관리자(keyring)에 저장한다(D-018). 배포된 설치 파일 곁에는 `.env`가
+없으므로 다른 사용자의 앱에는 아무 영향이 없다.
+
+```
+TIINGO_API_KEY=...
+OPEN_API_KEY=...          # 공공데이터포털(한국 주식) 서비스 키 — "일반 인증키(Decoding)" 값
+OPEN_API_ENDPOINT=...     # 선택. 공공데이터포털 엔드포인트를 바꿔야 할 때만
+```
+
 ## 권장 IDE
 
 [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)

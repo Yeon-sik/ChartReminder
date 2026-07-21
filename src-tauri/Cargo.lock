@@ -2132,6 +2132,7 @@ dependencies = [
 name = "investment-replay"
 version = "0.1.0"
 dependencies = [
+ "dotenvy",
  "keyring",
  "tauri",
  "tauri-build",

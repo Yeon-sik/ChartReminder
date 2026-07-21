@@ -11,6 +11,11 @@ export interface ProviderApiKeyFieldProps {
   readonly signupUrl: string;
   /** 공급자별 추가 안내(예: 키 형식 주의사항). 없으면 표시하지 않는다. */
   readonly note?: string;
+  /**
+   * .env(개발 편의용)에서 이미 키가 자동 적용됐다(D-018) — 수동 입력 UI 대신 안내만
+   * 보여준다. `AppComposition.envManagedProviderIds`로 판단해 호출측이 전달한다.
+   */
+  readonly envManaged?: boolean;
 }
 
 type Status =
@@ -31,12 +36,16 @@ export function ProviderApiKeyField({
   label,
   signupUrl,
   note,
+  envManaged = false,
 }: ProviderApiKeyFieldProps) {
   const [status, setStatus] = useState<Status>({ kind: "loading" });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (envManaged) {
+      return;
+    }
     let cancelled = false;
     composition.apiKeyStore
       .get(providerId)
@@ -53,7 +62,7 @@ export function ProviderApiKeyField({
     return () => {
       cancelled = true;
     };
-  }, [composition, providerId]);
+  }, [composition, providerId, envManaged]);
 
   async function handleSave(): Promise<void> {
     if (input.trim() === "") {
@@ -81,6 +90,17 @@ export function ProviderApiKeyField({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (envManaged) {
+    return (
+      <fieldset className="provider-api-key">
+        <legend>{label}</legend>
+        <p className="provider-api-key__status provider-api-key__status--ok">
+          환경변수(.env)에서 자동으로 적용되었습니다. 별도 입력이 필요하지 않습니다.
+        </p>
+      </fieldset>
+    );
   }
 
   return (

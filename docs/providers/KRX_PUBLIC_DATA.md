@@ -1,6 +1,6 @@
 # Provider: 공공데이터포털(data.go.kr) 한국 주식 일봉, BYOK
 
-docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-21 WebSearch/WebFetch로 확인한 공식 문서·커뮤니티 자료 기준(D-017, OQ-005 RESOLVED).
+docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-21 WebSearch/WebFetch로 확인한 공식 문서·커뮤니티 자료 기준(D-017, OQ-005 RESOLVED). 같은 날 사용자의 실 서비스 키로 성공 경로(엔드포인트·인증·응답 스키마·`endBasDt` 경계)를 직접 호출해 재확인했다(D-019) — 자세한 내용은 아래 각 절 참고.
 
 ## 데이터 의미
 
@@ -13,21 +13,24 @@ docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-21 W
 ## 엔드포인트
 
 - `GET https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/getStockPriceInfo`
-- 쿼리 파라미터: `serviceKey`(인증키), `resultType=json`, `numOfRows`, `pageNo`, `likeSrtnCd`(6자리 단축코드), `beginBasDt`/`endBasDt`(`YYYYMMDD`, 포함 범위)
+- 쿼리 파라미터: `serviceKey`(인증키), `resultType=json`, `numOfRows`, `pageNo`, `likeSrtnCd`(6자리 단축코드), `beginBasDt`/`endBasDt`(`YYYYMMDD`)
+- **`beginBasDt`는 포함, `endBasDt`는 배타적이다(실측 확인, 2026-07-21, D-019)** — 흔한 문서·커뮤니티 서술("포함 범위")과 다르다. `beginBasDt=20260720&endBasDt=20260720`(같은 날)과 `beginBasDt=20260718&endBasDt=20260720`(종료일에 그 날짜 포함 의도)은 실제로 07-20 데이터를 반환하지 않았고, `endBasDt=20260721`이어야 07-20이 포함됐다 — 반개구간 `[beginBasDt, endBasDt)`. `KrxPublicDataProvider`는 도메인의 반개구간 `range`를 날짜 변환 없이 그대로 두 파라미터에 전달한다(우연히 정확히 일치)
 - 인증: `serviceKey` 쿼리 파라미터. 공공데이터포털은 "Encoding"(이미 URL 인코딩된 값)과 "Decoding"(원문 값) 두 종류의 키를 함께 발급한다 — 이 앱은 URL을 만들 때 항상 `encodeURIComponent`를 적용하므로, **사용자는 "Decoding"(일반 인증키, 평문) 값을 입력해야 한다.** Encoding 키를 그대로 입력하면 이중 인코딩으로 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 난다 — `ProviderApiKeyField`의 안내 문구에 반영
-- 응답: data.go.kr 표준 OpenAPI 봉투. `response.header.resultCode`/`resultMsg`, `response.body.totalCount`, `response.body.items.item`(배열 또는 단일 객체 — 항목이 1개면 배열이 아니라 단일 객체로 올 수 있어 방어적으로 배열화한다). 필드: `basDt`(YYYYMMDD), `srtnCd`(단축코드), `itmsNm`(종목명), `mkp`(시가), `hipr`(고가), `lopr`(저가), `clpr`(종가), `trqu`(거래량, 선택)
+- **엔드포인트는 오퍼레이션 경로(`/getStockPriceInfo`)까지 정확히 가리켜야 한다** — 서비스 루트(`.../GetStockSecuritiesInfoService`)까지만 주면 요청 자체가 성립하지 않는다(사용자가 `.env`의 `OPEN_API_ENDPOINT`를 서비스 루트로 넣어 실제로 겪은 오류, D-019). `KrxPublicDataProvider`는 `baseUrl` 오버라이드가 `/getStockPriceInfo`로 끝나지 않으면 자동으로 붙여 방어한다
+- 응답: data.go.kr 표준 OpenAPI 봉투. `response.header.resultCode`/`resultMsg`, `response.body.totalCount`, `response.body.items.item`. 실측(2026-07-21)으로는 `totalCount=1`일 때도 `item`이 배열로 왔다 — 다만 다른 계정·응답 조건에서 단일 객체로 올 가능성을 배제할 수 없어 코드는 두 형태 모두 방어적으로 처리한다. 필드: `basDt`(YYYYMMDD), `srtnCd`(단축코드), `itmsNm`(종목명), `mkp`(시가), `hipr`(고가), `lopr`(저가), `clpr`(종가), `trqu`(거래량, 선택) — 실측 결과 이 숫자 필드들은 JSON 숫자가 아니라 **숫자 문자열**로 온다(예: `"clpr": "244000"`). `KrxPublicDataProvider`는 숫자·숫자 문자열을 모두 받아들인다
 - CORS 미지원(공공데이터포털 API 일반적으로 브라우저 직접 호출 시 CORS 오류가 나 서버/네이티브 프록시가 필요하다는 점이 다수 커뮤니티 자료로 확인됨) — Tiingo와 동일하게 `tauri-plugin-http` 기반 `tauriHttpClient`만 사용하며, 브라우저 프리뷰에는 이 Provider를 등록하지 않는다
 
 ## 호출 제한과 관찰된 동작
 
 - 개발계정: 일 10,000회. 운영계정은 활용사례 등록 신청 시 트래픽 증량 가능(공식 페이지 기준, 2026-07-21)
-- **resultCode 매핑**(data.go.kr 플랫폼 공통 `OpenAPI_ServiceResult` 표준 — 이 서비스 전용 문서가 아니라 플랫폼 공통 규격에 근거한 매핑이므로, 실제 서비스 키로 호출해 재확인이 필요한 항목으로 남긴다):
-  - `00`: 정상
-  - `03`: NODATA — 오류가 아니라 빈 결과로 처리(상장 이전·전체 휴장 구간 등)
-  - `22`: 서비스 요청 제한 횟수 초과 — `ProviderRateLimitError`(재시도 안 함, 계정 단위 일일 한도)
-  - `20`/`21`/`30`/`31`/`32`/`33`: 서비스 접근 거부·키 미등록·미서명 등 — `ProviderAuthError`
-  - `04`/`05`: HTTP_ERROR/SERVICETIME_OUT — `ProviderNetworkError`(재시도 대상)
-  - 그 외: `ProviderResponseError`
+- **resultCode 매핑**(data.go.kr 플랫폼 공통 `OpenAPI_ServiceResult` 표준 — 이 서비스 전용 문서가 아니라 플랫폼 공통 규격에 근거한 매핑):
+  - `00`: 정상 — **실측 확인됨**(2026-07-21, `resultMsg: "NORMAL SERVICE."`, 실 서비스 키로 삼성전자 일봉 조회 성공)
+  - `03`: NODATA — 오류가 아니라 빈 결과로 처리(상장 이전·전체 휴장 구간 등). 미검증(이 코드가 실제로 반환되는 상황은 아직 재현하지 못함)
+  - `22`: 서비스 요청 제한 횟수 초과 — `ProviderRateLimitError`(재시도 안 함, 계정 단위 일일 한도). 미검증
+  - `20`/`21`/`30`/`31`/`32`/`33`: 서비스 접근 거부·키 미등록·미서명 등 — `ProviderAuthError`. 미검증
+  - `04`/`05`: HTTP_ERROR/SERVICETIME_OUT — `ProviderNetworkError`(재시도 대상). 미검증
+  - 그 외: `ProviderResponseError`. 미검증
+  - `00` 외 코드는 실 키가 정상 동작해 오류 경로(잘못된 키·한도 초과 등)를 아직 재현하지 못했다 — 문구가 다르면 갱신 필요
 - 앱 정책: 5xx·네트워크 오류는 지수 백오프 재시도, 인증·응답 형식·rate limit 오류는 즉시 실패(재시도로 해결되지 않음) — Tiingo·Binance와 동일 원칙
 
 ## 이용조건
@@ -37,9 +40,9 @@ docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-21 W
 - 재배포: **하지 않음**. Tiingo(D-015)와 동일하게 BYOK로 재배포 관계 자체가 발생하지 않도록 설계
 - 캐시: 사용자 로컬 SQLite에만 저장. 앱 바이너리에 데이터를 내장하지 않음
 - 출처 표시: UI와 내보내기 파일에 "한국거래소(공공데이터포털 경유)" 출처를 명시
-- API 키 저장: Windows 자격 증명 관리자(Rust `keyring` crate, Tiingo와 동일 경로 재사용) — 평문 SQLite·파일에 저장하지 않는다(D-015, D-016, docs/09 §2)
+- API 키 저장: Windows 자격 증명 관리자(Rust `keyring` crate, Tiingo와 동일 경로 재사용) — 평문 SQLite·파일에 저장하지 않는다(D-015, D-016, docs/09 §2). 개발 편의로 저장소 루트 `.env`의 `OPEN_API_KEY`/`OPEN_API_ENDPOINT`가 있으면 자동 적용되지만, 이 값은 Rust 런타임에서만 읽고 배포 바이너리에는 포함되지 않는다(D-018)
 - 근거 문서: https://www.data.go.kr/data/15094808/openapi.do (서비스 개요·활용신청·트래픽), 공공데이터포털 공통 OpenAPI 오류 규격(플랫폼 전반에서 재사용되는 `resultCode` 표)
-- 공개 릴리스 게이트(docs/09 §6): BYOK 모델이라 이 앱의 상업적 재배포 권한 여부와 무관하게 동작. 다만 이 문서의 `resultCode` 매핑과 응답 봉투 구조는 실 서비스 키로 아직 검증하지 못했다(이 세션에 실 키가 없음) — 사용자가 실 키로 1회 확인 필요(PROJECT_STATE 남은 위험 참고)
+- 공개 릴리스 게이트(docs/09 §6): BYOK 모델이라 이 앱의 상업적 재배포 권한 여부와 무관하게 동작. 성공 경로(엔드포인트·인증·응답 스키마·날짜 경계)는 실 서비스 키로 확인됨(2026-07-21, D-019). 오류 경로(`resultCode` 00 외)는 아직 미검증 — PROJECT_STATE 남은 위험 참고
 
 ## 정규화 규칙
 

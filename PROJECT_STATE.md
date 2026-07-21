@@ -10,6 +10,18 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 완료된 마일스톤
 
+- D-020 — 통합 투자 설정 + 표시 통화·환율 변환 + 설정 탭 (2026-07-21, 정식 마일스톤 번호 없음, M8 직후 사용자 요청)
+  - OQ-006 RESOLVED: 표시/입력 경계 전용 "현재 환율" 변환으로 교차 통화 비교 지원 — 시뮬레이션 엔진·캔들 캐시는 항상 자산 고유 통화를 그대로 쓰고, 표시·입력 시에만 환산한다(엔진 무변경)
+  - **통합 투자 설정(완전 통합, AskUserQuestion으로 확정)**: `SessionSetupForm`에서 자산별 모드·금액·주기·수수료 입력을 제거하고 화면 전체에 하나뿐인 투자 설정으로 교체. `prepareReplaySession`/`SimulationConfig`(자산마다 다를 수 있는 애플리케이션 계층)는 변경 없음 — `sessionSetupModel.ts`가 통합 설정을 자산마다 고유 통화로 환산해 개별 `SimulationConfig`를 만든다
+  - `src/domain/shared/fxConversion.ts`: `convertAmount`/`convertMoney` — KRW·USD·USDT 세 통화만 지원, USD·USDT는 1:1 가정(사용자 명시), 환산 불가 시 `DomainValidationError`
+  - `src/infrastructure/fx/frankfurterFxRateProvider.ts`: Frankfurter(무료·키 불필요·CORS 열림) 기반 USD/KRW 환율 Provider, 1시간 in-memory 캐시. Tiingo·공공데이터포털과 달리 CORS가 열려 있어 `tauri-plugin-http` 불필요 — 기존 `fetchHttpClient`로 Tauri·브라우저 프리뷰 모두 동작(Playwright로 브라우저에서 실제 환율 조회 성공 확인: `1 USD = 1482.6 KRW`)
+  - `src/application/ports/appSettingsStore.ts` + `sqlite`/`inMemory` 구현: 표시 통화(KRW/USD) 영속화, 새 SQLite 마이그레이션 v3(`app_settings` key/value). BYOK 비밀정보(`ApiKeyStore`)와 책임 분리
+  - `src/features/app-settings/SettingsScreen.tsx`(신규 화면) + `App.tsx` 탭 네비게이션("세션 설정"/"설정") — 표시 통화 선택, 현재 환율 표시+새로고침, 그리고 기존에 메인 화면에 있던 Tiingo·공공데이터포털 `ProviderApiKeyField` 두 개를 이 탭으로 이동
+  - `src/features/replay-workspace/viewModel.ts`: `buildResultSummary`·`buildPortfolioSeries`·`buildPriceSeries`(`"raw"` 모드만)가 표시 통화로 환산된 값을 반환 — 서로 다른 통화 자산(KRW·USDT·USD)도 결과 요약·투자금 변화 차트에서 같은 스케일로 비교 가능. 결과 화면에 환산 가정(USDT=USD 1:1, 환율 기준일·출처) 문구 추가
+  - `src-tauri/tauri.conf.json`: 초기 창 높이 640 → 1280
+  - 검증: `npm run verify`(format/lint/typecheck/463 tests/cargo check) PASS. React 훅 lint 규칙(`react-hooks/set-state-in-effect`)이 실제 버그를 하나 잡음 — 마운트 effect에서 동기적으로 `setState`를 호출하던 환율 조회 로직을 이벤트 핸들러/Promise 콜백 전용으로 재구성
+  - Playwright MCP로 `npm run dev` 브라우저에서 종단 확인: 통합 투자 설정 → 설정 탭에서 표시 통화 KRW→USD 전환 → 세션 설정 화면 라벨 즉시 반영("원금 (USD)") → BTC+ETH 2자산 세션 제출 → 결과 요약에 "1000.00 USD"(USDT→USD 1:1 환산)와 환산 가정 문구 정상 표시, 콘솔 오류 없음(파비콘 404 제외)
+  - **미검증**: KRW 자산(KRX)을 포함한 실제 환산(예: KRX+크립토 혼합, 표시 통화 USD)은 브라우저 프리뷰에 KRX Provider가 없어 확인 못함 — Tauri 데스크톱에서 사용자가 1회 확인 필요. `AppSettingsStore` SQLite 재시작 후 영속 여부도 Tauri 환경 실사용 확인 필요(단위 테스트로는 확인됨)
 - M8 — 한국 주식 Provider (2026-07-21)
   - OQ-005 RESOLVED(D-017): 공공데이터포털(data.go.kr) "금융위원회_주식시세정보"(`GetStockSecuritiesInfoService`), **BYOK** — D-015(Tiingo)와 동일 원칙. 한국투자증권 Open API(무료지만 증권 계좌 개설 전제)보다 진입장벽이 낮아 채택
   - `src/infrastructure/providers/krxPublicData/`: `KrxPublicDataProvider`(BYOK 키 미설정은 `ProviderAuthError`, data.go.kr 표준 `resultCode` 봉투를 `00`/`03`(NODATA→빈 결과)/`22`(한도초과→`ProviderRateLimitError`)/`20·21·30·31·32·33`(인증·권한→`ProviderAuthError`)/`04·05`(일시적→`ProviderNetworkError`)/기타(`ProviderResponseError`)로 매핑, `numOfRows`/`pageNo` 페이지네이션을 Provider 내부에서 결합하고 `totalCount` 미달 시 실패), `KRX_PUBLIC_DATA_INSTRUMENTS`(대형주 5종 큐레이션: 삼성전자·SK하이닉스·NAVER·카카오·현대차)
@@ -17,10 +29,13 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
   - **보안 수정**: Tiingo(Authorization 헤더)와 달리 이 API는 `serviceKey`를 쿼리 파라미터로만 받는다 — 재시도 소진 시 오류 메시지에 URL을 포함해야 해서, `redactServiceKey()`로 키 값을 지운 뒤에만 메시지에 넣도록 구현(docs/09 §2, 회귀 테스트 포함)
   - HTTP 전송·키 저장은 M7 인프라를 그대로 재사용(신규 Rust 코드 없음): `tauriHttpClient`(capability에 `https://apis.data.go.kr/*` 추가), keyring 기반 `ApiKeyStore`(D-016에서 표시명과 분리해 둔 `investment-replay.provider-api-key.<providerId>` 접두사 덕분에 새 Provider 추가가 저장 경로 변경 없이 가능)
   - `src/app/composition.ts`: 3번째 Provider(`krx-public-data`) 등록, BYOK 키 로드 루프를 Tiingo·KRX 공통으로 일반화. `src/App.tsx`: 카탈로그 병합에 KRX 추가, 두 번째 `ProviderApiKeyField`(Encoding/Decoding 키 주의 안내 포함— `ProviderApiKeyField`에 선택적 `note` prop 추가)
-  - `docs/providers/KRX_PUBLIC_DATA.md`: 데이터 의미·엔드포인트·`resultCode` 매핑·이용조건·정규화 규칙 기록(docs/09 §5). `resultCode` 표는 data.go.kr 플랫폼 공통 규격에 근거한 것으로, 이 서비스 전용 문서에서 직접 확인하지 못해 실 키 검증이 필요한 항목으로 명시
-  - 검증: `npm run verify`(format/lint/typecheck/428 tests/cargo check) PASS, `npm run build` PASS. KRX Provider 계약 테스트 24개(정규화·범위 절단·정렬·중복 제거·likeSrtnCd 오검색 방어·resultCode 매핑·페이지네이션 결합·serviceKey 로그 미노출 등)
+  - `docs/providers/KRX_PUBLIC_DATA.md`: 데이터 의미·엔드포인트·`resultCode` 매핑·이용조건·정규화 규칙 기록(docs/09 §5)
+  - **D-018(같은 날 후속)**: `.env`(개발 편의) 자동 적용 — 저장소 루트 `.env`에 `TIINGO_API_KEY`/`OPEN_API_KEY`/`OPEN_API_ENDPOINT`가 있으면 Rust(Tauri 백엔드, `dotenvy` + `get_env_provider_key`/`get_env_provider_endpoint` 커맨드)에서만 읽어 keyring 값보다 우선 적용하고, `ProviderApiKeyField`는 수동 입력 대신 자동 적용 안내만 보여준다. 값이 없으면 기존 수동 입력→keyring 저장 흐름 그대로. 프런트엔드 Vite 번들(`import.meta.env`)로는 절대 읽지 않아 배포 바이너리에 개인 키가 섞이지 않음
+  - **D-019(실 키로 처음 검증, 버그 2건 발견·수정)**: 사용자가 실 서비스 키로 조회 중 오류를 보고 — `curl`로 직접 원인을 재현·격리함. (1) `.env`의 `OPEN_API_ENDPOINT`에 오퍼레이션 경로(`/getStockPriceInfo`)가 빠지면 요청이 성립하지 않음 → `KrxPublicDataProvider`가 자동으로 경로를 보정하도록 수정. (2) **`endBasDt`가 흔한 문서 서술과 달리 배타적(exclusive)** — `[beginBasDt, endBasDt)` 반개구간임을 실측으로 확인, 기존 구현은 반대로 가정해 요청 범위의 마지막 날짜가 항상 누락되고 있었음 → 하루를 빼던 로직 제거. 부수 확인: `resultCode: "00"` 성공 응답, 가격 필드는 숫자 문자열로 옴, `totalCount=1`이어도 `items.item`은 배열로 옴(기존 방어 코드가 이미 처리하고 있어 추가 수정 불필요)
+  - 검증: `npm run verify`(format/lint/typecheck/432 tests/cargo check) PASS, `npm run build` PASS, `npm run tauri dev` 정상 기동(패닉 없음). KRX Provider 계약 테스트 30개(정규화·범위 절단·정렬·중복 제거·likeSrtnCd 오검색 방어·resultCode 매핑·페이지네이션 결합·serviceKey 로그 미노출·baseUrl 정규화 등)
   - 브라우저 프리뷰 스모크: Playwright MCP로 `npm run dev` 확인 — 크립토 카탈로그만 노출(KRX·Tiingo 모두 미등록, 설계대로), 콘솔 오류 없음(파비콘 404 제외)
-  - **미검증**: 실 data.go.kr 무료 키로 종단 확인(BYOK 입력 → 크립토+한국 주식 혼합 세션 → 재생) — 이 세션에는 실 키가 없어 수행하지 못함(Tiingo와 동일한 남은 위험). `resultCode` 표·응답 봉투 구조(`items.item` 단일/배열 등)도 실 키로 최초 확인 필요
+  - **실 키 검증 완료(D-019)**: 사용자의 실 data.go.kr 키로 삼성전자 일봉을 성공적으로 조회함(`resultCode: "00"`, 날짜 경계 정확) — Tiingo와 달리 이 Provider는 이제 성공 경로가 실측 확인됨
+  - **남은 미검증**: (1) 크립토+한국 주식 혼합 세션 → 재생까지의 앱 UI 전체 흐름(원시 HTTP 호출은 확인했으나 세션 준비·리플레이 화면은 미확인). (2) `resultCode` 00 외 오류 경로(잘못된 키·한도 초과 등)는 여전히 미검증 — 실패를 인위적으로 재현하지 않는 한 확인 어려움
 - M7 — 미국 주식 Provider (2026-07-19)
   - OQ-004 RESOLVED(D-015): 조사 결과 검토한 모든 무료 API(Alpha Vantage·Tiingo·Twelve Data·Financial Modeling Prep)가 "본인 이용"과 "앱의 불특정 최종사용자에게 재배포"를 구분하고 후자는 유료 계약을 요구함 확인 → **BYOK(Bring-Your-Own-Key)** 채택: 앱은 데이터를 재배포하지 않고 각 사용자가 자신의 무료 키를 직접 입력
   - Provider: **Tiingo**(`GET /tiingo/daily/<ticker>/prices`) — 무료 티어에서 원시 OHLC와 수정주가(adjClose 등)를 함께 제공하는 유일한 후보였음(D-015 근거 상세)
@@ -105,6 +120,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - **세션 저장·불러오기, CSV/JSON 내보내기(M6)**: 세션(자산·기간·표시 기준·시뮬레이션 설정·재생 속도·데이터 버전)을 SQLite(Tauri)/메모리(브라우저 프리뷰)에 저장·불러오기, 현재 세션을 JSON으로, 포트폴리오 시계열을 CSV(출처·가정 헤더 포함)로 내보내기(Tauri 네이티브 저장 대화상자)
 - **미국 주식(M7, BYOK)**: Tiingo 대형주 5종(AAPL·MSFT·GOOGL·AMZN·NVDA) — 사용자가 자신의 무료 Tiingo API 키를 입력하면 암호화폐 자산과 함께(최대 2개 비교) 조회 가능. 키는 Windows 자격 증명 관리자에 저장. Tauri 데스크톱 런타임에서만 동작(브라우저 프리뷰는 크립토만)
 - **한국 주식(M8, BYOK)**: 공공데이터포털 대형주 5종(삼성전자·SK하이닉스·NAVER·카카오·현대차) — 사용자가 자신의 무료 data.go.kr 서비스 키를 입력하면 암호화폐·미국 주식과 함께(최대 2개 비교) 조회 가능. 수정주가는 제공하지 않음(원시 시세만). Tauri 데스크톱 런타임에서만 동작
+- **통합 투자 설정 + 표시 통화·환율 변환 + 설정 탭(D-020)**: 비교 자산 전체에 동일한 투자 규칙(모드·금액·주기·수수료) 하나만 적용. 표시 통화(KRW/USD(USDT)) 설정 탭에서 선택 — 결과 요약·투자금 변화 차트·투자 금액 입력이 이 통화 기준으로 환산됨(Frankfurter 현재 환율, USDT=USD 1:1 가정). BYOK API 키 입력은 설정 탭으로 이동
 
 ## 검증 상태
 
@@ -113,15 +129,16 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 | Format | PASS | `npm run format:check` | 2026-07-21, Prettier 3.9 |
 | Lint | PASS | `npm run lint` | 2026-07-21, ESLint 10 flat config |
 | Typecheck | PASS | `npm run typecheck` | 2026-07-21, tsc strict |
-| Unit test | PASS | `npm run test` | 2026-07-21, Vitest 4 + jsdom, 428개 통과 + live 1개 skip |
-| Integration test | PASS | `npm run test` | Provider 계약(Binance+Tiingo+공공데이터포털) + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
-| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, Binance 대상 2026-07-14 수동 1회 PASS 이후 재실행 안 함. Tiingo·공공데이터포털용 live smoke는 아직 없음(실 키 필요) |
-| Cargo check | PASS | `npm run check:rust` | 2026-07-21, M8은 신규 Rust 의존성 없음(M7의 keyring 경로 재사용) |
-| npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함. M8은 신규 npm 의존성 없음 |
-| Production build | PASS | `npm run build` | 2026-07-21, tsc + vite build (M8 변경 포함 재검증) |
-| Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`) 포함한 재빌드는 아직 안 함 — `cargo check`만 확인. M8은 신규 Rust 의존성 없어 이 재빌드 필요성에 영향 없음 |
+| Unit test | PASS | `npm run test` | 2026-07-21, Vitest 4 + jsdom, 463개 통과 + live 1개 skip |
+| Integration test | PASS | `npm run test` | Provider 계약(Binance+Tiingo+공공데이터포털) + FX Provider 계약(Frankfurter) + SQLite(better-sqlite3, app_settings 포함) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
+| Live API smoke | PASS (opt-in, Binance만 자동화) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, Binance 대상 2026-07-14 수동 1회 PASS 이후 재실행 안 함. 공공데이터포털은 사용자의 실 키로 `curl` 직접 호출 검증 완료(2026-07-21, D-019). Frankfurter는 curl과 Playwright 브라우저 양쪽에서 실 호출 확인(2026-07-21, D-020). Tiingo는 여전히 미검증(실 키 없음) |
+| Cargo check | PASS | `npm run check:rust` | 2026-07-21, `dotenvy` 추가(D-018, `.env` 자동 적용). D-020은 신규 Rust 의존성 없음 |
+| npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함. M8·D-020은 신규 npm 의존성 없음(Rust `dotenvy`만 추가, D-018) |
+| Production build | PASS | `npm run build` | 2026-07-21, tsc + vite build (M8+D-018/D-019/D-020 변경 포함 재검증) |
+| Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 M8의 `dotenvy`를 포함한 재빌드는 아직 안 함 — `cargo check`+`npm run tauri dev`(기동 확인)만 확인 |
 | 설치 테스트 | 부분 PASS (M6 시점) | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19(M6), 이 머신에서 1회 확인. MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증. M7 이후 재검증 안 함 |
-| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 2026-07-21: 설정 화면 로드, 크립토 카탈로그만 노출(Tiingo·공공데이터포털 모두 미등록, 설계대로), 콘솔 오류 없음(파비콘 404 제외) 확인. M6 세션 저장·내보내기, M7 Tiingo·M8 공공데이터포털 데이터 조회(BYOK 키 입력→실 데이터→재생)는 Tauri 데스크톱 런타임이 필요해 브라우저 프리뷰로 검증 불가 — `npm run tauri dev` + 실 키로 사용자 확인 필요 |
+| `npm run tauri dev` 기동 확인 | PASS | `npm run tauri dev` | 2026-07-21: Rust 빌드 성공, 패닉 없이 네이티브 창 기동 확인(D-018 도입 후). UI 내부 상호작용(BYOK 자동 적용 문구 렌더링 등)은 네이티브 창이라 자동 캡처 도구가 없어 사용자 육안 확인에 의존. D-020(창 높이 1280 등) 반영 후 재기동은 아직 안 함 |
+| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 2026-07-21: 통합 투자 설정 → 설정 탭 표시 통화 전환(KRW→USD, 라벨 즉시 반영) → 2자산 세션 제출 → 결과 요약 통화 환산·환산 가정 문구 정상 표시, Frankfurter 실 환율 조회 성공, 콘솔 오류 없음(파비콘 404 제외) 확인(D-020). M7 Tiingo·M8 공공데이터포털 데이터 조회는 Tauri 데스크톱 런타임이 필요해 브라우저 프리뷰로 검증 불가 |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
 
@@ -143,21 +160,24 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 조합 루트 런타임 분기: `isTauri()`(`@tauri-apps/api/core`)로 Tauri에서는 SqliteCandleRepository, 브라우저 프리뷰(Playwright 검증용)에서는 InMemoryCandleRepository 주입 (D-013)
 - 미국 주식 Provider: Tiingo, BYOK 모델 (D-015, OQ-004 RESOLVED). 키는 Rust `keyring` crate로 Windows 자격 증명 관리자에 저장. CORS 미지원이라 Tiingo 전용으로 `tauri-plugin-http` 도입(Binance는 기존 `fetchHttpClient` 유지)
 - 다중 Provider 조합: `AppComposition.providers`가 providerId → Provider 맵을 보관하고, `prepareReplaySession`이 자산마다 알맞은 Provider를 조회 (D-015) — M8에서 실제로 3번째 Provider(공공데이터포털)를 같은 패턴으로 추가해 재사용성 검증됨
-- 한국 주식 Provider: 공공데이터포털(data.go.kr) "금융위원회_주식시세정보", BYOK 모델 (D-017, OQ-005 RESOLVED). Tiingo와 동일한 `tauriHttpClient`·keyring 저장 경로 재사용(신규 Rust 의존성 없음). 이 API는 수정주가를 제공하지 않음(원시 시세만)
+- 한국 주식 Provider: 공공데이터포털(data.go.kr) "금융위원회_주식시세정보", BYOK 모델 (D-017, OQ-005 RESOLVED). Tiingo와 동일한 `tauriHttpClient`·keyring 저장 경로 재사용. 이 API는 수정주가를 제공하지 않음(원시 시세만). `endBasDt`는 배타적(exclusive) 경계다 — 흔한 문서 서술과 다름, 실측으로 확인(D-019)
+- BYOK 키 `.env` 자동 적용(개발 편의) (D-018): 저장소 루트 `.env`의 `TIINGO_API_KEY`/`OPEN_API_KEY`/`OPEN_API_ENDPOINT`가 있으면 Rust 런타임에서만 읽어 자동 적용하고, 없으면 기존 수동 입력(keyring 저장)으로 폴백. 프런트엔드 빌드에는 절대 포함되지 않아 배포 바이너리에 개인 키가 섞이지 않음
+- 통합 투자 설정 + 표시 통화·환율 변환 (D-020, OQ-006 RESOLVED): 비교 자산 전체에 동일한 투자 규칙(모드·금액·주기·수수료) 하나만 적용(자산별 설정 기능 제거). 표시 통화(KRW/USD)는 설정 탭에서 선택, 값은 표시/입력 경계에서만 환산(엔진·캐시는 항상 자산 고유 통화). FX Provider는 Frankfurter(무료·키 불필요·CORS 열림), USD/USDT는 1:1 가정
 
 ## 열린 문제
 
-- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-004·OQ-005·OQ-007 RESOLVED)
+- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-004·OQ-005·OQ-006·OQ-007 RESOLVED)
 - GitHub 원격 저장소 생성됨(`Yeon-sik/CashOS.git`), CI 워크플로 자체는 아직 없음 (D-008). D-016으로 표시명이 Chart Reminder로 바뀌어 원격 저장소명·draft GitHub Release(`v0.1.0-alpha`, `CashOS_0.1.0_x64...` 설치 파일 첨부)가 이제 표시명과 불일치 — 저장소 이름 변경·릴리스 자산 교체 여부는 외부 시스템 변경이라 사용자 판단 필요, Claude가 임의로 변경하지 않음
 - 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음, M5부터 이어지는 항목)
 - M6 남은 위험: MSI(all-users) 설치는 관리자 권한 환경에서 미검증(이 세션은 비관리자 셸). 진짜 "신규 환경"(별도 물리·가상 머신) 설치 테스트는 아직 없음. GitHub Release는 draft 상태로 유지 중이며 게시(publish)는 사용자 판단 필요
 - M7 남은 위험: (1) 실 Tiingo 키로 종단 검증 미실시 — 이 세션에 실 API 키가 없어 BYOK 키 입력→저장→암호화폐/미국 주식 혼합 세션→재생→수정주가 토글의 실제 데이터 흐름은 사용자가 `npm run tauri dev`로 1회 확인 필요. (2) Tiingo의 "HTTP 200 + 평문 할당량 초과 응답" 분류는 공식 문서가 아니라 관찰(GitHub 이슈)에 근거한 휴리스틱이라 문구가 바뀌면 갱신 필요. (3) M6 시점 `.msi`/`.exe`는 M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)을 포함해 재빌드되지 않음 — 다음 릴리스 전 `npm run tauri build` 재실행 필요
-- M8 남은 위험: (1) 실 data.go.kr 키로 종단 검증 미실시 — 이 세션에 실 서비스 키가 없어 BYOK 키 입력→저장→한국 주식 데이터 조회→재생의 실제 흐름은 사용자가 `npm run tauri dev`로 1회 확인 필요. (2) `resultCode` 오류 매핑(`00`/`03`/`22`/`20·21·30·31·32·33`/`04·05`)은 data.go.kr 플랫폼 공통 규격에 근거한 것이지 이 서비스 전용 공식 문서로 직접 확인한 것이 아니다 — 실 키로 최소 정상 응답(`00`)과 인증 실패(잘못된 키) 한 번씩은 확인 필요. (3) `response.body.items.item`이 단일 항목일 때 배열이 아니라 단일 객체로 오는지도 실 키 없이는 확인 불가(코드는 두 형태 모두 방어적으로 처리하도록 작성했으나 미검증)
+- M8 남은 위험: (1) 성공 경로(엔드포인트·인증·응답 스키마·날짜 경계)는 실 서비스 키로 확인됨(D-019). 다만 크립토+한국 주식 혼합 세션→재생까지의 앱 UI 전체 흐름은 아직 사용자 확인이 안 됨(원시 HTTP 호출만 확인). (2) `resultCode` 00 외 오류 경로(잘못된 키·한도 초과 등)는 여전히 미검증. (3) M8 시점 `.msi`/`.exe`는 M7+M8의 새 Rust 의존성(`keyring`, `tauri-plugin-http`, `dotenvy`)을 포함해 재빌드되지 않음 — 다음 릴리스 전 `npm run tauri build` 재실행 필요
+- D-020 남은 위험: (1) KRW 자산(KRX)을 포함한 실제 통화 환산은 브라우저 프리뷰로 확인 못함(KRX Provider가 Tauri 전용) — Tauri 데스크톱에서 크립토+한국 주식 혼합 세션으로 사용자 확인 필요. (2) `AppSettingsStore`의 SQLite 영속(앱 재시작 후에도 표시 통화 유지)은 단위 테스트로만 확인, 실제 Tauri 재시작 시나리오는 미확인. (3) 창 높이 1280 변경 후 `npm run tauri dev`로 실제 레이아웃 재확인 필요(브라우저 프리뷰는 창 크기 개념이 없음)
 
 ## 다음 작업
 
 1. 실 Tiingo 무료 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 암호화폐+미국 주식 혼합 세션 → 수정주가 토글 → 재생)
-2. 실 data.go.kr 무료 서비스 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 한국 주식 데이터 조회 → 재생) — `resultCode` 매핑·`items.item` 형태 실검증 겸함
-3. `npm run tauri build`로 재빌드 — M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 D-016 표시명 변경(`Chart Reminder_0.1.0_x64...`) 반영(M8은 신규 Rust 의존성 없음)
+2. `npm run tauri dev`에서 크립토+한국 주식 혼합 세션→재생까지 UI로 직접 확인(D-019로 HTTP 레벨은 확인됨, 남은 건 세션 준비·리플레이 화면) — 표시 통화 KRW/USD 전환 및 KRW 자산 환산도 이때 함께 확인
+3. `npm run tauri build`로 재빌드 — M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`), M8의 `dotenvy`, D-016 표시명 변경(`Chart Reminder_0.1.0_x64...`), D-020 창 높이(1280) 반영
 4. M9 — 통합 MVP Release(암호화폐·미국·한국 주식 지원 범위 정리, 설치 검증)
 5. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, GitHub 원격 저장소명·draft Release 이름 정리 여부 결정

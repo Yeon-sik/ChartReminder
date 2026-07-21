@@ -10,6 +10,12 @@ import {
   toDecimalString,
   type DecimalString,
 } from "../../domain/shared/decimal";
+import {
+  convertAmount,
+  convertMoney,
+  type DisplayCurrency,
+  type UsdKrwRate,
+} from "../../domain/shared/fxConversion";
 import type { Money } from "../../domain/shared/money";
 import type { TradingDate } from "../../domain/shared/time";
 import type { ReplayDataset } from "../../domain/replay/replayDataset";
@@ -70,9 +76,16 @@ function instrumentLabel(instrument: Instrument): string {
   return `${instrument.displayName} (${instrument.symbol})`;
 }
 
-function transformPrices(prices: readonly DecimalString[], mode: DisplayMode): DecimalString[] {
+function transformPrices(
+  prices: readonly DecimalString[],
+  mode: DisplayMode,
+  fromCurrency: string,
+  displayCurrency: DisplayCurrency,
+  usdKrwRate: UsdKrwRate | null,
+): DecimalString[] {
   if (mode === "raw") {
-    return [...prices];
+    // raw만 절대 금액이라 표시 통화 환산 대상이다(정규화/누적수익률은 이미 통화 무관, D-020).
+    return prices.map((price) => convertAmount(price, fromCurrency, displayCurrency, usdKrwRate));
   }
   if (mode === "normalized-100") {
     return normalizeToBase100(prices);
@@ -86,33 +99,50 @@ function transformPrices(prices: readonly DecimalString[], mode: DisplayMode): D
  *
  * **미래 데이터 비노출의 실제 구현 지점**: `cursorIndex`까지만 자른다. 이 함수는
  * `ReplayEngine.getState().cursor` 이외의 값을 커서로 받아서는 안 된다.
+ *
+ * `displayCurrency`/`usdKrwRate`는 `"raw"` 모드에서만 쓰인다(D-020) — 정규화·누적수익률은
+ * 이미 통화 무관이다.
  */
 export function buildPriceSeries(
   dataset: ReplayDataset,
   instrumentsById: Readonly<Record<string, Instrument>>,
   mode: DisplayMode,
   cursorIndex: number,
+  displayCurrency: DisplayCurrency,
+  usdKrwRate: UsdKrwRate | null,
 ): AssetPriceSeries[] {
   return Object.keys(instrumentsById).map((instrumentId) => {
+    const instrument = instrumentsById[instrumentId];
     const days = buildSimulationDays(dataset, instrumentId).slice(0, cursorIndex + 1);
     const observed = days.filter(hasPrice);
     const dates = observed.map((day) => day.date);
     const rawPrices = observed.map((day) => day.valuationPrice.value);
-    const transformed = transformPrices(rawPrices, mode);
+    const transformed = transformPrices(
+      rawPrices,
+      mode,
+      instrument.quoteCurrency,
+      displayCurrency,
+      usdKrwRate,
+    );
 
     return {
       instrumentId,
-      label: instrumentLabel(instrumentsById[instrumentId]),
+      label: instrumentLabel(instrument),
       points: dates.map((time, index) => ({ time, value: toChartNumber(transformed[index]) })),
     };
   });
 }
 
-/** 자산별 원금/평가액 차트 시리즈. `cursorIndex`까지만 자른다 (위 R6 규칙과 동일). */
+/**
+ * 자산별 원금/평가액 차트 시리즈. `cursorIndex`까지만 자른다 (위 R6 규칙과 동일).
+ * 금액은 표시 통화로 환산해 반환한다(D-020) — 서로 다른 통화 자산도 같은 스케일로 비교 가능.
+ */
 export function buildPortfolioSeries(
   resultsByInstrumentId: Readonly<Record<string, SimulationResult>>,
   instrumentsById: Readonly<Record<string, Instrument>>,
   cursorIndex: number,
+  displayCurrency: DisplayCurrency,
+  usdKrwRate: UsdKrwRate | null,
 ): PortfolioSeries[] {
   return Object.entries(resultsByInstrumentId).map(([instrumentId, result]) => {
     const visible = result.snapshots.slice(0, cursorIndex + 1);
@@ -121,31 +151,43 @@ export function buildPortfolioSeries(
       label: instrumentLabel(instrumentsById[instrumentId]),
       contributedCapital: visible.map((s) => ({
         time: s.date,
-        value: toChartNumber(s.contributedCapital.amount),
+        value: toChartNumber(
+          convertMoney(s.contributedCapital, displayCurrency, usdKrwRate).amount,
+        ),
       })),
-      totalValue: visible.map((s) => ({ time: s.date, value: toChartNumber(s.totalValue.amount) })),
+      totalValue: visible.map((s) => ({
+        time: s.date,
+        value: toChartNumber(convertMoney(s.totalValue, displayCurrency, usdKrwRate).amount),
+      })),
     };
   });
 }
 
-/** 커서 시점의 결과 요약 한 줄. `cursorIndex`가 스냅샷 배열 범위 안이라고 신뢰한다 (ReplayEngine이 보장). */
+/**
+ * 커서 시점의 결과 요약 한 줄. `cursorIndex`가 스냅샷 배열 범위 안이라고 신뢰한다 (ReplayEngine이 보장).
+ * `Money` 필드는 표시 통화로 환산해 반환한다(D-020) — `profitLoss`처럼 부호가 있는 값도
+ * 그대로 환산되므로(같은 비율 스케일) 손익 방향은 바뀌지 않는다.
+ */
 export function buildResultSummary(
   resultsByInstrumentId: Readonly<Record<string, SimulationResult>>,
   instrumentsById: Readonly<Record<string, Instrument>>,
   cursorIndex: number,
+  displayCurrency: DisplayCurrency,
+  usdKrwRate: UsdKrwRate | null,
 ): ResultSummaryRow[] {
   return Object.entries(resultsByInstrumentId).map(([instrumentId, result]) => {
     const snapshot = result.snapshots[cursorIndex];
     const isFinal = cursorIndex === result.snapshots.length - 1;
+    const toDisplay = (money: Money) => convertMoney(money, displayCurrency, usdKrwRate);
     return {
       instrumentId,
       label: instrumentLabel(instrumentsById[instrumentId]),
       date: snapshot.date,
-      contributedCapital: snapshot.contributedCapital,
-      cash: snapshot.cash,
-      marketValue: snapshot.marketValue,
-      totalValue: snapshot.totalValue,
-      profitLoss: snapshot.profitLoss,
+      contributedCapital: toDisplay(snapshot.contributedCapital),
+      cash: toDisplay(snapshot.cash),
+      marketValue: toDisplay(snapshot.marketValue),
+      totalValue: toDisplay(snapshot.totalValue),
+      profitLoss: toDisplay(snapshot.profitLoss),
       returnRate: snapshot.returnRate,
       drawdownRateToDate: snapshot.drawdownRate,
       priceStatus: snapshot.priceStatus,

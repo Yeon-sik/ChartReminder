@@ -4,10 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { AppComposition } from "../../app/composition";
 import type { CandleRepository } from "../../application/ports/candleRepository";
 import type { FileExporter } from "../../application/ports/fileExporter";
+import type { FxRateProvider } from "../../application/ports/fxRateProvider";
 import type { MarketDataProvider } from "../../application/ports/marketDataProvider";
 import type { Instrument } from "../../domain/instrument/instrument";
 import type { ReplaySessionRecord } from "../../domain/session/replaySession";
 import { ReplayEngine } from "../../domain/replay/replayEngine";
+import { InMemoryAppSettingsStore } from "../../infrastructure/persistence/inMemoryAppSettingsStore";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
 import { BINANCE_INSTRUMENTS } from "../../infrastructure/providers/binance/binanceCatalog";
 import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
@@ -42,6 +44,11 @@ function buildComposition(sessionRepository: InMemorySessionRepository): AppComp
     sessionRepository,
     fileExporter: unusedFileExporter,
     apiKeyStore: new InMemoryApiKeyStore(),
+    envManagedProviderIds: new Set(),
+    fxRateProvider: {
+      getUsdKrwRate: () => Promise.reject(new Error("not used")),
+    } as FxRateProvider,
+    appSettingsStore: new InMemoryAppSettingsStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
     setApiKey: () => Promise.reject(new Error("not used")),

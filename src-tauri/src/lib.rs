@@ -42,8 +42,49 @@ fn clear_provider_api_key(provider_id: String) -> Result<(), String> {
     }
 }
 
+/// provider별로 자동 적용을 허용하는 .env 변수 이름의 허용 목록. 임의 변수를
+/// 프런트엔드에 노출하지 않기 위해 provider_id를 고정된 변수명에만 매핑한다.
+fn env_api_key_var(provider_id: &str) -> Option<&'static str> {
+    match provider_id {
+        "tiingo" => Some("TIINGO_API_KEY"),
+        "krx-public-data" => Some("OPEN_API_KEY"),
+        _ => None,
+    }
+}
+
+fn env_endpoint_var(provider_id: &str) -> Option<&'static str> {
+    match provider_id {
+        "krx-public-data" => Some("OPEN_API_ENDPOINT"),
+        _ => None,
+    }
+}
+
+fn read_nonempty_env(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|value| !value.trim().is_empty())
+}
+
+/// .env(개발 편의용, docs/09 §2 — 배포 바이너리에는 값이 없어 아무 효과가 없다)에서
+/// BYOK 키를 자동으로 읽는다. 값이 없으면 None을 반환해 프런트엔드가 기존 수동 입력
+/// UI(keyring 저장, D-015)로 폴백하게 한다.
+#[tauri::command]
+fn get_env_provider_key(provider_id: String) -> Option<String> {
+    env_api_key_var(&provider_id).and_then(read_nonempty_env)
+}
+
+/// 위와 동일한 원칙으로 provider별 엔드포인트 오버라이드(.env)를 읽는다(예: KRX 공공데이터
+/// API의 `OPEN_API_ENDPOINT`). 없으면 Provider의 기본 엔드포인트를 그대로 쓴다.
+#[tauri::command]
+fn get_env_provider_endpoint(provider_id: String) -> Option<String> {
+    env_endpoint_var(&provider_id).and_then(read_nonempty_env)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 현재 디렉토리 또는 상위 디렉토리에서 .env를 찾는다(dotenvy 공식 동작) — 저장소 루트의
+    // .env가 `src-tauri`를 cwd로 실행돼도 발견된다. 배포된 실행 파일 곁에는 .env가 없으므로
+    // 이 호출은 아무 효과가 없다(개발 전용 편의 기능, .env는 Git에 커밋되지 않는다).
+    dotenvy::dotenv().ok();
+
     tauri::Builder::default()
         // SQLite 연결만 플러그인이 담당한다. 스키마 마이그레이션은 TS 러너가 수행한다 (D-011).
         .plugin(tauri_plugin_sql::Builder::default().build())
@@ -53,7 +94,9 @@ pub fn run() {
             write_export_file,
             save_provider_api_key,
             load_provider_api_key,
-            clear_provider_api_key
+            clear_provider_api_key,
+            get_env_provider_key,
+            get_env_provider_endpoint
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

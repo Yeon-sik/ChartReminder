@@ -3,13 +3,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { PrepareReplaySessionRequest } from "../../application/use-cases/prepareReplaySession";
 import type { Instrument } from "../../domain/instrument/instrument";
 import { DomainValidationError } from "../../domain/shared/errors";
+import type { DisplayCurrency, UsdKrwRate } from "../../domain/shared/fxConversion";
 import type { DisplayMode } from "../replay-workspace/viewModel";
 import "./SessionSetupForm.css";
 import {
   buildPrepareReplaySessionRequest,
   createDefaultFormState,
-  defaultAssetFormState,
-  type AssetFormState,
+  type InvestmentSettingsFormState,
   type RecurringFrequency,
   type SessionSetupFormState,
 } from "./sessionSetupModel";
@@ -17,6 +17,8 @@ import {
 export interface SessionSetupFormProps {
   readonly availableInstruments: readonly Instrument[];
   readonly defaultInstrument: Instrument;
+  readonly displayCurrency: DisplayCurrency;
+  readonly usdKrwRate: UsdKrwRate | null;
   readonly onSubmit: (
     request: PrepareReplaySessionRequest,
     instrumentsById: Record<string, Instrument>,
@@ -35,6 +37,8 @@ const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 export function SessionSetupForm({
   availableInstruments,
   defaultInstrument,
+  displayCurrency,
+  usdKrwRate,
   onSubmit,
 }: SessionSetupFormProps) {
   const [state, setState] = useState<SessionSetupFormState>(() =>
@@ -43,15 +47,19 @@ export function SessionSetupForm({
   const [error, setError] = useState<string | null>(null);
 
   const selectedIds = useMemo(
-    () => new Set(state.assets.map((asset) => asset.instrument.id)),
+    () => new Set(state.assets.map((instrument) => instrument.id)),
     [state.assets],
   );
   const canAddAsset = state.assets.length < 2 && availableInstruments.length > state.assets.length;
 
-  function updateAsset(index: number, patch: Partial<AssetFormState>): void {
+  function updateInvestment(patch: Partial<InvestmentSettingsFormState>): void {
+    setState((prev) => ({ ...prev, investment: { ...prev.investment, ...patch } }));
+  }
+
+  function updateAsset(index: number, instrument: Instrument): void {
     setState((prev) => ({
       ...prev,
-      assets: prev.assets.map((asset, i) => (i === index ? { ...asset, ...patch } : asset)),
+      assets: prev.assets.map((asset, i) => (i === index ? instrument : asset)),
     }));
   }
 
@@ -60,7 +68,7 @@ export function SessionSetupForm({
     if (next === undefined) {
       return;
     }
-    setState((prev) => ({ ...prev, assets: [...prev.assets, defaultAssetFormState(next)] }));
+    setState((prev) => ({ ...prev, assets: [...prev.assets, next] }));
   }
 
   function removeAsset(index: number): void {
@@ -70,9 +78,9 @@ export function SessionSetupForm({
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     try {
-      const request = buildPrepareReplaySessionRequest(state);
+      const request = buildPrepareReplaySessionRequest(state, displayCurrency, usdKrwRate);
       const instrumentsById = Object.fromEntries(
-        state.assets.map((asset) => [asset.instrument.id, asset.instrument]),
+        state.assets.map((instrument) => [instrument.id, instrument]),
       );
       setError(null);
       onSubmit(request, instrumentsById, state.displayMode);
@@ -85,12 +93,15 @@ export function SessionSetupForm({
     }
   }
 
+  const investment = state.investment;
+
   return (
     <form className="session-setup" onSubmit={handleSubmit}>
       <h1>Chart Reminder 설정</h1>
       <p className="session-setup__hint">
-        과거 시점으로 돌아가 자산 1~2개에 투자 규칙을 적용했을 때 자산 가치가 어떻게 변했는지
-        재생합니다. 가격은 Binance BTC/ETH/SOL USDT 시장 가격 기준입니다.
+        과거 시점으로 돌아가 자산 1~2개에 동일한 투자 규칙을 적용했을 때 자산 가치가 어떻게 변했는지
+        재생합니다. 투자 금액은 표시 통화({displayCurrency}) 기준으로 입력하며, 자산 고유 통화로
+        자동 환산됩니다(설정 탭에서 표시 통화를 바꿀 수 있습니다).
       </p>
 
       <fieldset>
@@ -134,10 +145,34 @@ export function SessionSetupForm({
         </label>
       </fieldset>
 
-      {state.assets.map((asset, index) => (
-        <fieldset key={asset.instrument.id} className="session-setup__asset">
-          <legend>
-            자산 {index + 1}
+      <fieldset>
+        <legend>비교 자산</legend>
+        {state.assets.map((instrument, index) => (
+          <div key={instrument.id} className="session-setup__asset">
+            <label>
+              자산 {index + 1}
+              <select
+                value={instrument.id}
+                onChange={(event) => {
+                  const next = availableInstruments.find(
+                    (candidate) => candidate.id === event.target.value,
+                  );
+                  if (next !== undefined) {
+                    updateAsset(index, next);
+                  }
+                }}
+              >
+                {availableInstruments
+                  .filter(
+                    (candidate) => candidate.id === instrument.id || !selectedIds.has(candidate.id),
+                  )
+                  .map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.displayName} ({candidate.symbol})
+                    </option>
+                  ))}
+              </select>
+            </label>
             {state.assets.length > 1 && (
               <button
                 type="button"
@@ -148,152 +183,128 @@ export function SessionSetupForm({
                 제거
               </button>
             )}
-          </legend>
+          </div>
+        ))}
 
+        {canAddAsset && (
+          <button type="button" onClick={addAsset}>
+            비교 자산 추가 (최대 2개)
+          </button>
+        )}
+      </fieldset>
+
+      <fieldset>
+        <legend>투자 설정 (선택한 모든 자산에 동일하게 적용)</legend>
+
+        <fieldset className="session-setup__mode">
+          <legend>투자 모드</legend>
           <label>
-            종목
-            <select
-              value={asset.instrument.id}
-              onChange={(event) => {
-                const next = availableInstruments.find(
-                  (instrument) => instrument.id === event.target.value,
-                );
-                if (next !== undefined) {
-                  updateAsset(index, { instrument: next });
-                }
-              }}
-            >
-              {availableInstruments
-                .filter(
-                  (instrument) =>
-                    instrument.id === asset.instrument.id || !selectedIds.has(instrument.id),
-                )
-                .map((instrument) => (
-                  <option key={instrument.id} value={instrument.id}>
-                    {instrument.displayName} ({instrument.symbol})
-                  </option>
-                ))}
-            </select>
+            <input
+              type="radio"
+              name="investment-mode"
+              checked={investment.mode === "lump-sum"}
+              onChange={() => updateInvestment({ mode: "lump-sum" })}
+            />
+            일시투자
           </label>
-
-          <fieldset className="session-setup__mode">
-            <legend>투자 모드</legend>
-            <label>
-              <input
-                type="radio"
-                name={`mode-${index}`}
-                checked={asset.mode === "lump-sum"}
-                onChange={() => updateAsset(index, { mode: "lump-sum" })}
-              />
-              일시투자
-            </label>
-            <label>
-              <input
-                type="radio"
-                name={`mode-${index}`}
-                checked={asset.mode === "dca"}
-                onChange={() => updateAsset(index, { mode: "dca" })}
-              />
-              정기 정액매수
-            </label>
-          </fieldset>
-
-          {asset.mode === "lump-sum" ? (
-            <label>
-              원금 ({asset.instrument.quoteCurrency})
-              <input
-                type="text"
-                inputMode="decimal"
-                value={asset.initialCash}
-                onChange={(event) => updateAsset(index, { initialCash: event.target.value })}
-              />
-            </label>
-          ) : (
-            <>
-              <label>
-                납입액 ({asset.instrument.quoteCurrency})
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={asset.recurringAmount}
-                  onChange={(event) => updateAsset(index, { recurringAmount: event.target.value })}
-                />
-              </label>
-              <label>
-                주기
-                <select
-                  value={asset.recurringFrequency}
-                  onChange={(event) =>
-                    updateAsset(index, {
-                      recurringFrequency: event.target.value as RecurringFrequency,
-                    })
-                  }
-                >
-                  <option value="weekly">매주</option>
-                  <option value="monthly">매월</option>
-                </select>
-              </label>
-              {asset.recurringFrequency === "weekly" ? (
-                <label>
-                  요일
-                  <select
-                    value={asset.recurringIsoDayOfWeek}
-                    onChange={(event) =>
-                      updateAsset(index, { recurringIsoDayOfWeek: Number(event.target.value) })
-                    }
-                  >
-                    {WEEKDAY_LABELS.map((label, weekdayIndex) => (
-                      <option key={label} value={weekdayIndex + 1}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <label>
-                  일자
-                  <input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={asset.recurringDayOfMonth}
-                    onChange={(event) =>
-                      updateAsset(index, { recurringDayOfMonth: Number(event.target.value) })
-                    }
-                  />
-                </label>
-              )}
-            </>
-          )}
-
           <label>
-            수수료(%)
+            <input
+              type="radio"
+              name="investment-mode"
+              checked={investment.mode === "dca"}
+              onChange={() => updateInvestment({ mode: "dca" })}
+            />
+            정기 정액매수
+          </label>
+        </fieldset>
+
+        {investment.mode === "lump-sum" ? (
+          <label>
+            원금 ({displayCurrency})
             <input
               type="text"
               inputMode="decimal"
-              value={asset.feePercent}
-              onChange={(event) => updateAsset(index, { feePercent: event.target.value })}
+              value={investment.initialCash}
+              onChange={(event) => updateInvestment({ initialCash: event.target.value })}
             />
           </label>
+        ) : (
+          <>
+            <label>
+              납입액 ({displayCurrency})
+              <input
+                type="text"
+                inputMode="decimal"
+                value={investment.recurringAmount}
+                onChange={(event) => updateInvestment({ recurringAmount: event.target.value })}
+              />
+            </label>
+            <label>
+              주기
+              <select
+                value={investment.recurringFrequency}
+                onChange={(event) =>
+                  updateInvestment({ recurringFrequency: event.target.value as RecurringFrequency })
+                }
+              >
+                <option value="weekly">매주</option>
+                <option value="monthly">매월</option>
+              </select>
+            </label>
+            {investment.recurringFrequency === "weekly" ? (
+              <label>
+                요일
+                <select
+                  value={investment.recurringIsoDayOfWeek}
+                  onChange={(event) =>
+                    updateInvestment({ recurringIsoDayOfWeek: Number(event.target.value) })
+                  }
+                >
+                  {WEEKDAY_LABELS.map((label, weekdayIndex) => (
+                    <option key={label} value={weekdayIndex + 1}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                일자
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={investment.recurringDayOfMonth}
+                  onChange={(event) =>
+                    updateInvestment({ recurringDayOfMonth: Number(event.target.value) })
+                  }
+                />
+              </label>
+            )}
+          </>
+        )}
 
-          <label className="session-setup__checkbox">
-            <input
-              type="checkbox"
-              checked={asset.allowFractionalQuantity}
-              onChange={(event) =>
-                updateAsset(index, { allowFractionalQuantity: event.target.checked })
-              }
-            />
-            소수점 매수 허용
-          </label>
-        </fieldset>
-      ))}
+        <label>
+          수수료(%)
+          <input
+            type="text"
+            inputMode="decimal"
+            value={investment.feePercent}
+            onChange={(event) => updateInvestment({ feePercent: event.target.value })}
+          />
+        </label>
 
-      {canAddAsset && (
-        <button type="button" onClick={addAsset}>
-          비교 자산 추가 (최대 2개)
-        </button>
-      )}
+        <label className="session-setup__checkbox">
+          <input
+            type="checkbox"
+            checked={investment.allowFractionalQuantity}
+            onChange={(event) =>
+              updateInvestment({ allowFractionalQuantity: event.target.checked })
+            }
+          />
+          소수점 매수 허용
+        </label>
+      </fieldset>
 
       {error !== null && (
         <p role="alert" className="session-setup__error">

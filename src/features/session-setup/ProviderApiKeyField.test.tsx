@@ -5,8 +5,10 @@ import type { AppComposition } from "../../app/composition";
 import type { ApiKeyStore } from "../../application/ports/apiKeyStore";
 import type { CandleRepository } from "../../application/ports/candleRepository";
 import type { FileExporter } from "../../application/ports/fileExporter";
+import type { FxRateProvider } from "../../application/ports/fxRateProvider";
 import type { MarketDataProvider } from "../../application/ports/marketDataProvider";
 import { ReplayEngine } from "../../domain/replay/replayEngine";
+import { InMemoryAppSettingsStore } from "../../infrastructure/persistence/inMemoryAppSettingsStore";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
 import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
 import { FakeReplayScheduler } from "../../test/fakeReplayScheduler";
@@ -27,6 +29,10 @@ const unusedFileExporter: FileExporter = {
   exportTextFile: () => Promise.reject(new Error("not used")),
 };
 
+const unusedFxRateProvider: FxRateProvider = {
+  getUsdKrwRate: () => Promise.reject(new Error("not used")),
+};
+
 /** setApiKey/clearApiKey를 실제로 apiKeyStore에 위임하는 composition (composition.ts와 동일 계약). */
 function buildComposition(apiKeyStore: ApiKeyStore = new InMemoryApiKeyStore()): AppComposition {
   return {
@@ -35,6 +41,9 @@ function buildComposition(apiKeyStore: ApiKeyStore = new InMemoryApiKeyStore()):
     sessionRepository: new InMemorySessionRepository(),
     fileExporter: unusedFileExporter,
     apiKeyStore,
+    envManagedProviderIds: new Set(),
+    fxRateProvider: unusedFxRateProvider,
+    appSettingsStore: new InMemoryAppSettingsStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
     async setApiKey(providerId, apiKey) {
@@ -123,5 +132,24 @@ describe("ProviderApiKeyField", () => {
     );
     await waitFor(() => expect(screen.getByText("키가 설정되지 않았습니다.")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+  });
+
+  it("envManaged면 .env 자동 적용 안내만 보여주고 입력 UI는 렌더링하지 않는다 (D-018)", () => {
+    render(
+      <ProviderApiKeyField
+        composition={buildComposition()}
+        providerId="tiingo"
+        label="Tiingo(미국 주식) API 키"
+        signupUrl="tiingo.com"
+        envManaged
+      />,
+    );
+    expect(
+      screen.getByText(
+        "환경변수(.env)에서 자동으로 적용되었습니다. 별도 입력이 필요하지 않습니다.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("API 키")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
   });
 });

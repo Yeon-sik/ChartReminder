@@ -6,6 +6,11 @@ import type { Instrument } from "../../domain/instrument/instrument";
 import { isDecimalString, parseDecimal, toDecimalString } from "../../domain/shared/decimal";
 import { DomainValidationError } from "../../domain/shared/errors";
 import {
+  convertAmount,
+  type DisplayCurrency,
+  type UsdKrwRate,
+} from "../../domain/shared/fxConversion";
+import {
   addDaysToTradingDate,
   assertTradingDate,
   tradingDateParts,
@@ -26,9 +31,13 @@ const DEFAULT_LOOKBACK_DAYS = 180;
 export type InvestmentMode = "lump-sum" | "dca";
 export type RecurringFrequency = "weekly" | "monthly";
 
-/** 자산 1개에 대한 폼 입력값. 모두 사용자가 입력한 원문 텍스트를 그대로 둔다 — 변환은 build 함수가 맡는다. */
-export interface AssetFormState {
-  readonly instrument: Instrument;
+/**
+ * 통합 투자 설정. (D-020 — 자산별로 따로 설정하지 않고 비교 대상 전체에 동일하게 적용한다)
+ *
+ * 금액(`initialCash`, `recurringAmount`)은 사용자가 고른 표시 통화(`DisplayCurrency`)
+ * 기준으로 입력받는다 — `buildPrepareReplaySessionRequest`가 자산마다 고유 통화로 환산한다.
+ */
+export interface InvestmentSettingsFormState {
   readonly mode: InvestmentMode;
   readonly initialCash: string;
   /** 퍼센트 표기 텍스트 (예: "0.1" = 0.1%). SimulationConfig.feeRate(비율)로 변환한다. */
@@ -41,15 +50,15 @@ export interface AssetFormState {
 }
 
 export interface SessionSetupFormState {
-  readonly assets: readonly AssetFormState[];
+  readonly assets: readonly Instrument[];
   readonly startDate: TradingDate;
   readonly endDate: TradingDate;
   readonly displayMode: DisplayMode;
+  readonly investment: InvestmentSettingsFormState;
 }
 
-export function defaultAssetFormState(instrument: Instrument): AssetFormState {
+export function defaultInvestmentSettings(): InvestmentSettingsFormState {
   return {
-    instrument,
     mode: "lump-sum",
     initialCash: "1000",
     feePercent: "0",
@@ -68,10 +77,11 @@ export function createDefaultFormState(
 ): SessionSetupFormState {
   const endDate = utcTradingDateFromUtcMs(nowUtcMs);
   return {
-    assets: [defaultAssetFormState(defaultInstrument)],
+    assets: [defaultInstrument],
     startDate: addDaysToTradingDate(endDate, -DEFAULT_LOOKBACK_DAYS),
     endDate,
     displayMode: "normalized-100",
+    investment: defaultInvestmentSettings(),
   };
 }
 
@@ -87,37 +97,45 @@ function toFeeRate(feePercent: string): string {
   return toDecimalString(parseDecimal(feePercent).dividedBy(100));
 }
 
-function buildAnchor(asset: AssetFormState): RecurringAnchor {
-  return asset.recurringFrequency === "weekly"
-    ? { kind: "day-of-week", isoDayOfWeek: asset.recurringIsoDayOfWeek }
-    : { kind: "day-of-month", dayOfMonth: asset.recurringDayOfMonth };
+function buildAnchor(investment: InvestmentSettingsFormState): RecurringAnchor {
+  return investment.recurringFrequency === "weekly"
+    ? { kind: "day-of-week", isoDayOfWeek: investment.recurringIsoDayOfWeek }
+    : { kind: "day-of-month", dayOfMonth: investment.recurringDayOfMonth };
 }
 
-function buildSimulationConfig(asset: AssetFormState): SimulationConfig {
-  const currency = asset.instrument.quoteCurrency;
-  const feeRate = toFeeRate(asset.feePercent);
+/** 통합 투자 설정을 자산 하나의 `SimulationConfig`로 변환한다 — 금액만 그 자산 고유 통화로 환산한다. */
+function buildSimulationConfig(
+  investment: InvestmentSettingsFormState,
+  instrument: Instrument,
+  displayCurrency: DisplayCurrency,
+  usdKrwRate: UsdKrwRate | null,
+): SimulationConfig {
+  const currency = instrument.quoteCurrency;
+  const feeRate = toFeeRate(investment.feePercent);
+  const toAssetCurrency = (amount: string): string =>
+    convertAmount(amount, displayCurrency, currency, usdKrwRate);
 
   const config: SimulationConfig =
-    asset.mode === "lump-sum"
+    investment.mode === "lump-sum"
       ? {
           mode: "lump-sum",
-          initialCash: { amount: asset.initialCash, currency },
+          initialCash: { amount: toAssetCurrency(investment.initialCash), currency },
           executionPrice: "close",
           feeRate,
-          allowFractionalQuantity: asset.allowFractionalQuantity,
+          allowFractionalQuantity: investment.allowFractionalQuantity,
           dividendPolicy: "ignore",
         }
       : {
           mode: "dca",
           initialCash: { amount: "0", currency },
           recurring: {
-            amount: { amount: asset.recurringAmount, currency },
-            frequency: asset.recurringFrequency,
-            anchor: buildAnchor(asset),
+            amount: { amount: toAssetCurrency(investment.recurringAmount), currency },
+            frequency: investment.recurringFrequency,
+            anchor: buildAnchor(investment),
           },
           executionPrice: "close",
           feeRate,
-          allowFractionalQuantity: asset.allowFractionalQuantity,
+          allowFractionalQuantity: investment.allowFractionalQuantity,
           dividendPolicy: "ignore",
         };
 
@@ -128,13 +146,15 @@ function buildSimulationConfig(asset: AssetFormState): SimulationConfig {
 }
 
 /**
- * 폼 상태를 유스케이스 요청으로 변환한다. (M5 view model 경계 1-2)
+ * 폼 상태를 유스케이스 요청으로 변환한다. (M5 view model 경계 1-2, D-020 통합 투자 설정)
  *
  * 자산 개수·기간 순서 등 폼 수준 검증만 여기서 하고, 금액·수수료 등 도메인 값
  * 검증은 `validateSimulationConfig`(prepareReplaySession 내부)에 위임한다.
  */
 export function buildPrepareReplaySessionRequest(
   state: SessionSetupFormState,
+  displayCurrency: DisplayCurrency,
+  usdKrwRate: UsdKrwRate | null,
 ): PrepareReplaySessionRequest {
   if (state.assets.length === 0) {
     throw new DomainValidationError("최소 1개 자산을 선택해야 한다");
@@ -150,9 +170,14 @@ export function buildPrepareReplaySessionRequest(
     );
   }
 
-  const selections: AssetSelection[] = state.assets.map((asset) => ({
-    instrument: asset.instrument,
-    simulationConfig: buildSimulationConfig(asset),
+  const selections: AssetSelection[] = state.assets.map((instrument) => ({
+    instrument,
+    simulationConfig: buildSimulationConfig(
+      state.investment,
+      instrument,
+      displayCurrency,
+      usdKrwRate,
+    ),
   }));
 
   return {

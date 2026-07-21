@@ -198,6 +198,52 @@
 - 결과: OQ-005 RESOLVED. `src/infrastructure/providers/krxPublicData/`, `src/app/composition.ts`(3번째 Provider 등록), `src/features/session-setup`(두 번째 `ProviderApiKeyField`), `src-tauri/capabilities/default.json`, `docs/providers/KRX_PUBLIC_DATA.md`
 - 재검토 조건: data.go.kr 이용약관이 바뀌거나, `resultCode` 표(D-017 근거)가 실제 키로 검증한 결과와 다르게 확인될 때, 더 많은 종목이나 수정주가가 필요해질 때
 
+## D-018: BYOK 키 .env 자동 적용(개발 편의), keyring 폴백 유지
+
+- 상태: Accepted
+- 맥락: M7·M8에서 Tiingo·공공데이터포털 키를 매번 앱 화면에서 수동 입력해야 해 개발 중 반복 작업이 됨. 사용자가 저장소 루트 `.env`에 `TIINGO_API_KEY`·`OPEN_API_KEY`·`OPEN_API_ENDPOINT`를 이미 넣어두고, 값이 있으면 자동 적용하고 없을 때만 기존 수동 입력을 쓰도록 요청함
+- 선택:
+  - **읽는 위치는 Rust(Tauri 백엔드)**: `dotenvy` crate로 `.env`를 로드하고(`dotenv()`는 현재 디렉토리 또는 상위에서 탐색하므로 `src-tauri`가 cwd여도 저장소 루트 `.env`를 찾음), 새 Tauri 커맨드 `get_env_provider_key`/`get_env_provider_endpoint`가 provider_id를 고정된 변수명(`tiingo`→`TIINGO_API_KEY`, `krx-public-data`→`OPEN_API_KEY`/`OPEN_API_ENDPOINT`)에만 매핑하는 허용 목록으로 값을 반환한다. **프런트엔드 Vite 빌드(`import.meta.env`)로는 절대 읽지 않는다** — Vite의 `VITE_` 프리픽스 값은 클라이언트 번들에 그대로 박히고, 이 번들이 `npm run tauri build` 산출물(GitHub Releases로 배포)에 포함되므로 그렇게 하면 개인 키가 배포 바이너리에 새어나간다(docs/09 §2 "배포 바이너리에 개발자 공용 비밀키를 내장하지 않음"). Rust에서 런타임에 `std::env::var`로 읽으면, 배포된 실행 파일 곁에는 `.env`가 없어 다른 사용자에게는 항상 `None`이라 이 위험이 원천적으로 없음
+  - **우선순위**: `.env` 값이 있으면 keyring에 저장된 값보다 우선 적용하고, `AppComposition.envManagedProviderIds`에 표시해 `ProviderApiKeyField`가 수동 입력 UI 대신 "환경변수(.env)에서 자동으로 적용되었습니다" 안내만 보여준다. `.env` 값이 없으면 기존 BYOK 흐름(수동 입력 → keyring 저장)이 100% 그대로 동작한다
+  - **`.env`는 여전히 비밀 저장소가 아니다**: keyring 기반 `ApiKeyStore`(D-015)를 대체하지 않는다 — `.env`는 이 저장소를 체크아웃한 개발자 로컬에서만 읽히는 값 소스일 뿐이고, `setApiKey`/`clearApiKey`·keyring 저장 경로는 변경 없이 그대로 유지. `.env`는 `.gitignore`에 이미 포함되어 있어 Git에 커밋되지 않음(기존 상태 확인됨)
+- 대안: 프런트엔드 `import.meta.env`(VITE_ 프리픽스)로 직접 읽기 — 배포 바이너리에 키가 박혀 기각. `.env` 값을 keyring에 자동으로 써넣기 — 저장 시점 로직이 이중화되고 "env가 사라지면 keyring에 남은 옛 값을 계속 쓰는" 혼란스러운 상태가 생겨 기각(대신 매 실행 시 env를 읽어 우선 적용하는 방식 채택)
+- 이유: 데스크톱 앱을 매번 재실행할 때마다 개발자 본인 키를 화면에서 다시 입력하는 것은 순수한 개발 마찰이고, Rust 런타임 경계에서만 읽으면 D-015의 BYOK·보안 원칙(재배포 없음, 배포 바이너리에 비밀 없음)을 조금도 훼손하지 않음
+- 결과: `src-tauri/src/lib.rs`(`dotenvy` 의존성, `get_env_provider_key`/`get_env_provider_endpoint` 커맨드), `src/infrastructure/security/tauriEnvProviderConfig.ts`, `src/app/composition.ts`(`envManagedProviderIds`), `src/features/session-setup/ProviderApiKeyField.tsx`(`envManaged` prop), `README.md`(`.env` 사용법)
+- 재검토 조건: macOS/Linux 등 다른 배포 방식에서 `.env`가 실수로 번들에 포함될 여지가 생기는 빌드 변경이 있을 때 재검토
+
+## D-019: 공공데이터포털 Provider 실 키 검증 — endBasDt 배타적 경계, 엔드포인트 보정
+
+- 상태: Accepted
+- 맥락: D-018로 `.env` 자동 적용을 붙인 뒤 사용자가 실제로 한국 주식 조회에서 오류를 겪음. 사용자의 `.env`(`OPEN_API_ENDPOINT=https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService`, 오퍼레이션 경로 `/getStockPriceInfo` 없음)와 실 서비스 키로 `curl`을 통해 직접 원인을 재현·격리함(이 세션에서 처음으로 실 키 확보, M8 종료 시점의 "미검증" 위험을 실제로 검증)
+- 발견:
+  1. **엔드포인트 경로 누락**: 사용자가 `.env`에 서비스 루트만 넣고 오퍼레이션 경로(`/getStockPriceInfo`)를 빠뜨림 — 이 API는 그 경로가 없으면 요청 자체가 성립하지 않는다(이전 D-017 조사 때는 이 경로를 항상 하드코딩해서 넘어갔던 부분이라 `baseUrl` 오버라이드 도입 시점에 놓쳤던 사각지대)
+  2. **`endBasDt`가 배타적(exclusive)이다**: `beginBasDt=20260714&endBasDt=20260716`으로 curl 직접 호출한 결과 07-14·07-15만 반환되고 07-16은 제외됨. `beginBasDt=20260720&endBasDt=20260720`(같은 날)과 `beginBasDt=20260718&endBasDt=20260720`도 07-20 데이터를 반환하지 않았고, `beginBasDt=20260720&endBasDt=20260721`이어야 07-20이 포함됨 — 즉 `[beginBasDt, endBasDt)` 반개구간이다. 기존 구현(D-017)은 "포함 범위"라는 흔한 문서·커뮤니티 서술을 그대로 따라 `endBasDt`에서 하루를 빼고 있었는데, 이게 정확히 반대 방향 오류였다 — 요청 범위의 **마지막 날짜가 항상 누락**되고 있었음(계약 테스트는 fixture 응답을 그대로 썼기 때문에 이 버그를 잡지 못함 — 실 API 호출로만 드러남)
+  3. 부수적으로 확인됨: `resultCode: "00"`/`resultMsg: "NORMAL SERVICE."`, 가격 필드(`clpr` 등)는 JSON 숫자가 아니라 숫자 문자열로 옴, `totalCount=1`이어도 `items.item`은 배열로 옴 — 기존 코드는 이미 이 형태들을 방어적으로 처리하고 있어 수정 불필요
+- 선택:
+  - `KrxPublicDataProvider`에 `normalizeBaseUrl()` 추가 — `baseUrl` 오버라이드가 `/getStockPriceInfo`로 끝나지 않으면 자동으로 붙인다(끝 슬래시 정리 포함)
+  - `endBasDt` 계산에서 하루를 빼던 로직 제거 — `range.endMs`(반개구간의 끝)의 날짜를 그대로 전달한다. 우리 도메인의 `UtcTimeRange`도 반개구간이라, 이 API의 실제 동작과 우연히 정확히 일치한다
+  - 계약 테스트(`endBasDt=20240103`로 갱신)와 `baseUrl` 정규화 테스트(서비스 루트만 준 경우·끝 슬래시·이미 완전한 경로 3가지) 추가. Fixture 기반 테스트의 한계(서버가 실제로 어떤 날짜에 응답하는지는 검증 못 함)를 인지하고 이번 실 키 확인 결과를 테스트 기대값에 반영
+- 이유: BYOK Provider는 문서·커뮤니티 자료만으로 구현하고 실 키 없이 넘어갔던 부분(D-017 "재검토 조건")이 실제로 문서와 다르게 동작했다 — 최초로 실 키를 확보한 지금 검증하고 즉시 수정하는 것이 다음 사용자가 같은 오류를 겪게 두는 것보다 낫다
+- 결과: `src/infrastructure/providers/krxPublicData/krxPublicDataProvider.ts`(엔드포인트 정규화, endBasDt 수정), 계약 테스트 3개 추가·1개 기대값 수정, `docs/providers/KRX_PUBLIC_DATA.md`(실측 결과 반영)
+- 재검토 조건: data.go.kr이 이 서비스의 날짜 범위 파라미터 의미를 문서화하거나 바꿀 때. `resultCode` 00 외 오류 경로(잘못된 키·한도 초과 등)는 여전히 미검증 — 재현되면 이 결정에 추가 기록
+
+## D-020: 통합 투자 설정 + 표시 통화·환율 변환(Frankfurter) + 설정 탭
+
+- 상태: Accepted
+- 맥락: 사용자가 다섯 가지를 함께 요청함 — (1) 투자 방식을 자산별로 따로 설정하지 않고 한 곳에서 통합 설정, (2) 현재 환율을 반영한 환율 변환기 추가(USDT는 USD와 1:1 가정), (3) 설정 탭 신설과 표시 통화(KRW/USD(USDT)) 지정, (4) BYOK API 키 입력 UI를 설정 탭으로 이동, (5) 앱 초기 창 높이 2배(640→1280). AskUserQuestion으로 (1)의 범위를 확인한 결과 "완전 통합"(자산 전체에 동일한 투자 규칙 하나만 적용, 자산별 값 유지 기능 제거)으로 확정됨. 이 작업은 OQ-006(교차 통화 비교, 기존 DEFERRED)을 실제로 해결한다
+- 선택:
+  - **통합 투자 설정**: `SessionSetupForm`/`sessionSetupModel.ts`에서 자산별 `AssetFormState`(모드·금액·주기·수수료)를 제거하고, 화면 전체에 하나뿐인 `InvestmentSettingsFormState`를 자산 목록과 분리해 둔다. `AssetSelection.simulationConfig`가 자산마다 다를 수 있다는 애플리케이션 계층(`prepareReplaySession.ts`) 자체는 바꾸지 않았다 — 통합은 순수히 폼(UI) 책임이며, `buildPrepareReplaySessionRequest`가 자산마다 동일한 설정을 각 자산 고유 통화로 환산해 개별 `SimulationConfig`를 만든다
+  - **환율 변환은 표시/입력 경계 전용**: 시뮬레이션 엔진·캔들 캐시는 항상 자산 고유 통화(quoteCurrency)를 그대로 쓴다(`domain-finance.md` 규칙 유지) — `src/domain/shared/fxConversion.ts`의 `convertAmount`/`convertMoney`가 유일한 변환 지점이며, (a) 통합 투자 금액 입력(표시 통화 → 자산 고유 통화), (b) 결과 화면(자산 고유 통화 → 표시 통화, `buildResultSummary`·`buildPortfolioSeries`·`buildPriceSeries`의 `"raw"` 모드)에서만 호출된다
+  - **USD/USDT 1:1 가정**(사용자 명시): `fxConversion.ts`의 `USD_PEGGED_CURRENCIES`가 USD·USDT를 환율 없이 동일하게 취급한다. `convertAmount`는 KRW ↔ USD-pegged 사이에서만 실제 환율을 요구하고, 필요한데 환율이 없으면 조용히 넘어가지 않고 `DomainValidationError`로 실패한다
+  - **FX Provider**: Frankfurter(`GET https://api.frankfurter.dev/v2/rate/USD/KRW`) — 무료, 키 불필요, CORS 열림(curl·브라우저 양쪽에서 직접 확인, `access-control-allow-origin: *`), 84개 중앙은행 데이터를 취합한 blended rate. Tiingo·공공데이터포털과 달리 CORS가 열려 있어 `tauri-plugin-http`가 필요 없고 기존 `fetchHttpClient`로 Tauri·브라우저 프리뷰 모두에서 동작한다 — Playwright로 브라우저 프리뷰에서 실제 환율 조회 성공을 확인함(`1 USD = 1482.6 KRW`). `FrankfurterFxRateProvider`가 1시간 in-memory 캐시를 둔다. 상세는 `docs/providers/FRANKFURTER.md`
+  - **설정 탭**: `App.tsx`에 `view: "setup" | "settings"` 상태와 간단한 탭 네비게이션 추가. 새 화면 `src/features/app-settings/SettingsScreen.tsx`가 표시 통화 라디오, 현재 환율 표시(+새로고침 버튼), 그리고 기존에 메인 설정 화면에 있던 `ProviderApiKeyField`(Tiingo·공공데이터포털) 두 개를 옮겨받는다
+  - **표시 통화 영속화**: 새 포트 `AppSettingsStore`(`getDisplayCurrency`/`setDisplayCurrency`, 기본값 KRW) — BYOK 비밀정보를 다루는 `ApiKeyStore`와 책임을 분리한다. Tauri는 SQLite 마이그레이션 버전 3(`app_settings` key/value 테이블, `replay_sessions`와 같은 패턴), 브라우저 프리뷰는 `InMemoryAppSettingsStore`
+  - **창 높이**: `src-tauri/tauri.conf.json`의 `app.windows[0].height`를 640 → 1280으로 변경
+- 대안: 자산별 투자 규칙 유지 + UI만 통합 배치 — AskUserQuestion에서 기각(완전 통합 선택). 과거 날짜별 환율 정합(historical FX matching) — 사용자가 "현재 환율"만 요구해 범위 밖으로 판단, 필요해지면 별도 재검토
+- 이유: 서로 다른 통화 자산을 비교할 때 투자 규칙까지 자산마다 다르면 "같은 조건에서 비교"라는 전제가 흔들린다 — 통합 설정 + 표시 통화 변환을 함께 두어야 "이 금액을 넣었다면"이라는 질문에 실제로 답이 된다. 표시 경계에서만 변환해 리플레이·시뮬레이션 엔진의 Provider·통화 독립성(GOAL.md §8)을 훼손하지 않는다
+- 결과: `src/domain/shared/fxConversion.ts`, `src/application/ports/fxRateProvider.ts`(+`FxRateError`), `src/application/ports/appSettingsStore.ts`, `src/infrastructure/fx/frankfurterFxRateProvider.ts`, `src/infrastructure/persistence/{sqlite,inMemory}AppSettingsStore.ts`(+migrations.ts v3), `src/features/app-settings/SettingsScreen.tsx`, `src/features/session-setup/sessionSetupModel.ts`·`SessionSetupForm.tsx`(통합), `src/features/replay-workspace/viewModel.ts`·`ReplayWorkspace.tsx`(통화 환산 표시), `src/App.tsx`(탭 네비게이션), `src-tauri/tauri.conf.json`(창 높이)
+- 재검토 조건: KRW·USD·USDT 외 통화(예: 다른 주식 시장) 자산이 추가되면 `fxConversion.ts`의 지원 통화 목록·환율 소스를 확장해야 함. 과거 날짜별 환율이 필요해지는 요구가 생기면(예: 특정 리플레이 시점 기준 손익 재현) 별도 결정 필요
+
 ## 새 결정 템플릿
 
 ```text

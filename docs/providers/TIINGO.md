@@ -30,7 +30,7 @@ docs/09_SECURITY_AND_DATA_LICENSING.md §5의 기록 의무 항목. 2026-07-19 �
 - 재배포: **하지 않음**. 이 앱은 사용자 자신의 키로 사용자 자신의 조회만 대행한다(BYOK) — Tiingo의 "내부 소비 전용" 제약과 재배포 승인·추가 비용 요구를 정면으로 우회하지 않고, 애초에 재배포 관계 자체가 발생하지 않도록 설계했다
 - 캐시: 사용자 로컬 SQLite에만 저장. 앱 바이너리에 데이터를 내장하지 않음
 - 출처 표시: UI와 내보내기 파일에 "Tiingo" 출처를 명시. Tiingo가 재배포 허가 시 요구하는 표준 문구는 `"Data sourced by Tiingo"` + `https://www.tiingo.com` 링크이나, 이 앱은 재배포하지 않으므로 필수 요건은 아니다 — 그래도 출처 투명성을 위해 표시한다
-- API 키 저장: Windows 자격 증명 관리자(Rust `keyring` crate) — 평문 SQLite·파일에 저장하지 않는다(D-015, docs/09 §2)
+- API 키 저장: Windows 자격 증명 관리자(Rust `keyring` crate) — 평문 SQLite·파일에 저장하지 않는다(D-015, docs/09 §2). 개발 편의로 저장소 루트 `.env`의 `TIINGO_API_KEY`가 있으면 자동 적용되지만, 이 값은 Rust 런타임에서만 읽고 배포 바이너리에는 포함되지 않는다(D-018)
 - 근거 문서: https://www.tiingo.com/documentation/end-of-day (엔드포인트), https://www.tiingo.com/documentation/general/connecting (인증), https://www.tiingo.com/about/pricing (요금제), https://app.tiingo.com/tos/ (이용약관)
 - 공개 릴리스 게이트(docs/09 §6): BYOK 모델 자체가 이 앱의 상업적 재배포 권한 여부와 무관하게 동작하므로 게이트에 걸리지 않는다. 다만 Tiingo가 BYOK 방식 자체를 금지하는 방향으로 ToS를 바꾸면 재검토 필요(D-015 재검토 조건)
 

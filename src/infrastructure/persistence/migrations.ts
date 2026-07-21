@@ -67,4 +67,14 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
         ON replay_sessions (updated_at_utc_ms DESC)`,
     ],
   },
+  {
+    version: 3,
+    description: "app settings (display currency, D-020)",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`,
+    ],
+  },
 ];

@@ -10,8 +10,10 @@ import type {
 import type { PrepareReplaySessionRequest } from "../../application/use-cases/prepareReplaySession";
 import type { Instrument } from "../../domain/instrument/instrument";
 import type { Candle } from "../../domain/market-data/candle";
+import type { FxRateProvider } from "../../application/ports/fxRateProvider";
 import { ReplayEngine } from "../../domain/replay/replayEngine";
 import { browserFileExporter } from "../../infrastructure/export/browserFileExporter";
+import { InMemoryAppSettingsStore } from "../../infrastructure/persistence/inMemoryAppSettingsStore";
 import { InMemoryCandleRepository } from "../../infrastructure/persistence/inMemoryCandleRepository";
 import { InMemorySessionRepository } from "../../infrastructure/persistence/inMemorySessionRepository";
 import { InMemoryApiKeyStore } from "../../infrastructure/security/inMemoryApiKeyStore";
@@ -97,6 +99,11 @@ function buildComposition(): AppComposition {
     sessionRepository: new InMemorySessionRepository(),
     fileExporter: browserFileExporter,
     apiKeyStore: new InMemoryApiKeyStore(),
+    envManagedProviderIds: new Set(),
+    fxRateProvider: {
+      getUsdKrwRate: () => Promise.reject(new Error("not used")),
+    } as FxRateProvider,
+    appSettingsStore: new InMemoryAppSettingsStore(),
     runtime: "browser-preview",
     buildReplayEngine: () => new ReplayEngine({ scheduler: new FakeReplayScheduler() }),
     setApiKey: () => Promise.reject(new Error("not used")),
@@ -135,6 +142,8 @@ describe("ReplayWorkspace", () => {
         request={buildRequest()}
         instrumentsById={{ [BTC.id]: BTC }}
         displayMode="raw"
+        displayCurrency="USD"
+        usdKrwRate={null}
         onBackToSetup={vi.fn()}
       />,
     );
@@ -144,8 +153,8 @@ describe("ReplayWorkspace", () => {
     await screen.findByText("재생 준비 완료 · 2024-01-01");
 
     expect(screen.getByText("Bitcoin (BTC/USDT)")).toBeInTheDocument();
-    // 1000 USDT로 종가 100에 매수 → 1000.00 USDT 평가액
-    expect(screen.getAllByText("1000.00 USDT")).not.toHaveLength(0);
+    // 1000 USDT로 종가 100에 매수 → 표시 통화 USD로 환산(1:1 가정, D-020) → 1000.00 USD 평가액
+    expect(screen.getAllByText("1000.00 USD")).not.toHaveLength(0);
   });
 
   it("한 단계 전진하면 다음 날짜의 결과로 갱신된다 (미래 데이터는 그 전까지 보이지 않음)", async () => {
@@ -155,19 +164,21 @@ describe("ReplayWorkspace", () => {
         request={buildRequest()}
         instrumentsById={{ [BTC.id]: BTC }}
         displayMode="raw"
+        displayCurrency="USD"
+        usdKrwRate={null}
         onBackToSetup={vi.fn()}
       />,
     );
 
     await screen.findByText("재생 준비 완료 · 2024-01-01");
     // 3일차(120) 평가액이 아직 보이지 않아야 한다
-    expect(screen.queryByText("1200.00 USDT")).not.toBeInTheDocument();
+    expect(screen.queryByText("1200.00 USD")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "한 단계 전진" }));
 
     await screen.findByText("일시정지 · 2024-01-02");
     // 종가 110 → 평가액 1100
-    expect(screen.getAllByText("1100.00 USDT")).not.toHaveLength(0);
-    expect(screen.queryByText("1200.00 USDT")).not.toBeInTheDocument();
+    expect(screen.getAllByText("1100.00 USD")).not.toHaveLength(0);
+    expect(screen.queryByText("1200.00 USD")).not.toBeInTheDocument();
   });
 });

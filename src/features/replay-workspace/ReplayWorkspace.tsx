@@ -6,6 +6,7 @@ import type {
 import type { Instrument } from "../../domain/instrument/instrument";
 import type { ReplaySpeed, ReplayStatus } from "../../domain/replay/replayEngine";
 import type { ReplayDataset } from "../../domain/replay/replayDataset";
+import type { DisplayCurrency, UsdKrwRate } from "../../domain/shared/fxConversion";
 import type { SimulationResult } from "../../domain/simulation/simulationEngine";
 import type { TradingDate } from "../../domain/shared/time";
 import "./ReplayWorkspace.css";
@@ -28,6 +29,9 @@ export interface ReplayWorkspaceProps {
   readonly request: PrepareReplaySessionRequest;
   readonly instrumentsById: Readonly<Record<string, Instrument>>;
   readonly displayMode: DisplayMode;
+  /** 표시 통화(D-020) — 투자금 변화·결과 요약·원시 가격 차트를 이 통화로 환산해 보여준다. */
+  readonly displayCurrency: DisplayCurrency;
+  readonly usdKrwRate: UsdKrwRate | null;
   /** 저장된 세션을 불러올 때 재생 속도를 복원한다 (docs/07 §4). 새 세션이면 undefined. */
   readonly initialSpeed?: ReplaySpeed;
   readonly onBackToSetup: () => void;
@@ -38,6 +42,8 @@ export function ReplayWorkspace({
   request,
   instrumentsById,
   displayMode,
+  displayCurrency,
+  usdKrwRate,
   initialSpeed,
   onBackToSetup,
 }: ReplayWorkspaceProps) {
@@ -84,6 +90,8 @@ export function ReplayWorkspace({
             dataNoticesByInstrumentId={session.dataNoticesByInstrumentId}
             instrumentsById={instrumentsById}
             displayMode={displayMode}
+            displayCurrency={displayCurrency}
+            usdKrwRate={usdKrwRate}
             cursor={session.replayState.cursor}
             status={session.replayState.status}
             speed={session.replayState.speed}
@@ -107,6 +115,8 @@ interface ReadyWorkspaceProps {
   readonly dataNoticesByInstrumentId: Readonly<Record<string, AssetDataNotice>>;
   readonly instrumentsById: Readonly<Record<string, Instrument>>;
   readonly displayMode: DisplayMode;
+  readonly displayCurrency: DisplayCurrency;
+  readonly usdKrwRate: UsdKrwRate | null;
   readonly cursor: number;
   readonly status: ReplayStatus;
   readonly speed: ReplaySpeed;
@@ -126,6 +136,8 @@ function ReadyWorkspace({
   dataNoticesByInstrumentId,
   instrumentsById,
   displayMode,
+  displayCurrency,
+  usdKrwRate,
   cursor,
   status,
   speed,
@@ -136,9 +148,28 @@ function ReadyWorkspace({
   onRestart,
   onSetSpeed,
 }: ReadyWorkspaceProps) {
-  const priceSeries = buildPriceSeries(dataset, instrumentsById, displayMode, cursor);
-  const portfolioSeries = buildPortfolioSeries(resultsByInstrumentId, instrumentsById, cursor);
-  const summaryRows = buildResultSummary(resultsByInstrumentId, instrumentsById, cursor);
+  const priceSeries = buildPriceSeries(
+    dataset,
+    instrumentsById,
+    displayMode,
+    cursor,
+    displayCurrency,
+    usdKrwRate,
+  );
+  const portfolioSeries = buildPortfolioSeries(
+    resultsByInstrumentId,
+    instrumentsById,
+    cursor,
+    displayCurrency,
+    usdKrwRate,
+  );
+  const summaryRows = buildResultSummary(
+    resultsByInstrumentId,
+    instrumentsById,
+    cursor,
+    displayCurrency,
+    usdKrwRate,
+  );
 
   const notices = Object.entries(dataNoticesByInstrumentId)
     .map(([instrumentId, notice]) => ({
@@ -183,6 +214,15 @@ function ReadyWorkspace({
 
       <section aria-label="결과 요약">
         <h2>결과 요약</h2>
+        {Object.values(instrumentsById).some(
+          (instrument) => instrument.quoteCurrency !== displayCurrency,
+        ) && (
+          <p className="replay-workspace__currency-note">
+            금액은 표시 통화({displayCurrency})로 환산해 표시됩니다. USDT는 USD와 1:1로 간주합니다.
+            {usdKrwRate !== null &&
+              ` 환율 기준일: ${new Date(usdKrwRate.asOfUtcMs).toISOString().slice(0, 10)} (1 USD = ${usdKrwRate.krwPerUsd} KRW, 출처: Frankfurter)`}
+          </p>
+        )}
         <ResultSummary rows={summaryRows} dataNoticesByInstrumentId={dataNoticesByInstrumentId} />
       </section>
 

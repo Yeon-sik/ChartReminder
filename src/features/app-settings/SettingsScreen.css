@@ -1,0 +1,78 @@
+.settings-screen {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.settings-screen fieldset {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-screen legend {
+  padding: 0 var(--space-2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.settings-screen__hint {
+  color: var(--color-text-muted);
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.settings-screen__radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.settings-screen__rate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-screen__rate p {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.settings-screen__rate-error {
+  color: var(--color-loss);
+}
+
+.settings-screen__rate button {
+  align-self: flex-start;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settings-screen__rate button:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.settings-screen__rate button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
