@@ -97,7 +97,7 @@ describe("buildPortfolioCsv", () => {
     const csv = buildPortfolioCsv(2_000, [assetInput()]);
     const lines = csv.trim().split("\n");
 
-    expect(lines[0]).toBe("# CashOS portfolio export");
+    expect(lines[0]).toBe("# Chart Reminder portfolio export");
     expect(lines).toContain(
       "instrumentId,date,contributedCapital,cash,marketValue,totalValue,profitLoss,returnRate,drawdownRate,priceStatus",
     );

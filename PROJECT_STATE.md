@@ -121,7 +121,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 핵심 계산: AI 미사용, 결정론적 계산
 - 저장: 로컬 우선
 - 패키지 매니저: npm (D-006)
-- 제품 표시명: CashOS (D-014, OQ-001 RESOLVED). Tauri identifier `com.investmentreplay.dev`·npm/Cargo 패키지명·SQLite 캐시 파일명은 설치 경로 단절을 피하기 위해 그대로 유지
+- 제품 표시명: Chart Reminder (D-016, OQ-001 RESOLVED — D-014의 "CashOS" 결정을 대체). Tauri identifier `com.investmentreplay.dev`·npm/Cargo 패키지명·SQLite 캐시 파일명은 설치 경로 단절을 피하기 위해 그대로 유지. M7에서 도입된 keyring 저장 키 접두사가 표시명(`cashos.*`)에 결합돼 있던 버그를 함께 수정(`investment-replay.*`로 안정화)
 - 품질 도구: Prettier + ESLint + Vitest + cargo check, CI는 GitHub 원격 생성 후 (D-008)
 - Decimal 라이브러리: decimal.js 10.6.0, `src/domain/shared/decimal.ts`로 캡슐화 (D-009)
 - 암호화폐 공급자: Binance 공개 klines API, USDT 거래쌍, base URL `data-api.binance.vision` (D-010, OQ-003 RESOLVED)
@@ -135,13 +135,14 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 ## 열린 문제
 
 - `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-004·OQ-007 RESOLVED)
-- GitHub 원격 저장소 생성됨(`Yeon-sik/CashOS.git`), CI 워크플로 자체는 아직 없음 (D-008)
+- GitHub 원격 저장소 생성됨(`Yeon-sik/CashOS.git`), CI 워크플로 자체는 아직 없음 (D-008). D-016으로 표시명이 Chart Reminder로 바뀌어 원격 저장소명·draft GitHub Release(`v0.1.0-alpha`, `CashOS_0.1.0_x64...` 설치 파일 첨부)가 이제 표시명과 불일치 — 저장소 이름 변경·릴리스 자산 교체 여부는 외부 시스템 변경이라 사용자 판단 필요, Claude가 임의로 변경하지 않음
 - 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음, M5부터 이어지는 항목)
 - M6 남은 위험: MSI(all-users) 설치는 관리자 권한 환경에서 미검증(이 세션은 비관리자 셸). 진짜 "신규 환경"(별도 물리·가상 머신) 설치 테스트는 아직 없음. GitHub Release는 draft 상태로 유지 중이며 게시(publish)는 사용자 판단 필요
 - M7 남은 위험: (1) 실 Tiingo 키로 종단 검증 미실시 — 이 세션에 실 API 키가 없어 BYOK 키 입력→저장→암호화폐/미국 주식 혼합 세션→재생→수정주가 토글의 실제 데이터 흐름은 사용자가 `npm run tauri dev`로 1회 확인 필요. (2) Tiingo의 "HTTP 200 + 평문 할당량 초과 응답" 분류는 공식 문서가 아니라 관찰(GitHub 이슈)에 근거한 휴리스틱이라 문구가 바뀌면 갱신 필요. (3) M6 시점 `.msi`/`.exe`는 M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)을 포함해 재빌드되지 않음 — 다음 릴리스 전 `npm run tauri build` 재실행 필요
 
 ## 다음 작업
 
-1. 실 Tiingo 무료 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 암호화폐+미국 주식 혼합 세션 → 수정주가 토글 → 재생)
-2. M8 — 한국 주식 Provider(OQ-005), 또는 M7 포함 재빌드 후 릴리스 갱신
-3. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, GitHub Release draft 게시 여부 결정
+1. 실 Tiingo 무료 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 암호화폐+미국 주식 혼합 세션 → 수정주가 토글 → 재생) — 사용자 진행 중
+2. `npm run tauri build`로 재빌드 — M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 D-016 표시명 변경(`Chart Reminder_0.1.0_x64...`) 반영
+3. M8 — 한국 주식 Provider(OQ-005)
+4. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, GitHub 원격 저장소명·draft Release 이름 정리 여부 결정

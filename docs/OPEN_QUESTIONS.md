@@ -4,9 +4,9 @@
 
 ## OQ-001 제품명
 
-- 상태: RESOLVED (2026-07-19, D-014)
-- 결정: 표시명 "CashOS" (README, GOAL, 창 제목, 앱 내 표기, 내보내기 파일 헤더 전체 반영)
-- 유지: Tauri identifier `com.investmentreplay.dev`, npm 패키지명 `investment-replay`, Cargo 패키지명은 변경하지 않음(D-014 — 재설치·데이터 경로 단절 방지가 표시명 변경보다 우선)
+- 상태: RESOLVED (2026-07-21, D-016 — D-014의 "CashOS" 결정을 대체)
+- 결정: 표시명 "Chart Reminder" (README, GOAL, 창 제목, 앱 내 표기, 내보내기 파일 헤더 전체 반영)
+- 유지: Tauri identifier `com.investmentreplay.dev`, npm 패키지명 `investment-replay`, Cargo 패키지명, SQLite DB 파일명은 변경하지 않음(D-016 — 재설치·데이터 경로 단절 방지가 표시명 변경보다 우선)
 
 ## OQ-002 패키지 매니저
 

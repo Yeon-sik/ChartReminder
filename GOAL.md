@@ -1,4 +1,4 @@
-# GOAL — CashOS
+# GOAL — Chart Reminder
 
 ## 1. 제품 한 문장
 

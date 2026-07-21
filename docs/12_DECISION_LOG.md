@@ -139,7 +139,7 @@
 
 ## D-014: 최종 제품 표시명 CashOS, identifier·패키지명 유지
 
-- 상태: Accepted
+- 상태: Superseded by D-016 (표시명 부분만. identifier·패키지명·DB 파일명 유지 결정 자체는 D-016에서도 그대로 유효)
 - 맥락: M6. OQ-001(제품명)이 D-007 이후 계속 OPEN이었고, D-007은 늦어도 M6 첫 공개 배포 전 확정을 요구함. GitHub 원격 저장소가 `Yeon-sik/CashOS.git`으로 생성되어 있어 사용자에게 확인한 결과 "CashOS"가 최종 제품명으로 확정됨
 - 선택:
   - 표시명(사용자에게 보이는 이름)을 "CashOS"로 확정 — `tauri.conf.json`의 `productName`·창 제목, `index.html` `<title>`, `src/app/appInfo.ts`의 `name`, 세션 설정 화면 제목, 세션 CSV 내보내기 헤더 주석, `README.md`·`GOAL.md` 제목에 반영
@@ -164,6 +164,18 @@
 - 이유: BYOK는 이 앱의 재배포 없이 무료 티어를 합법적으로 쓸 수 있는 유일한 방법이며, `docs/09_SECURITY_AND_DATA_LICENSING.md` §2("향후 주식 공급자 연결 시 API 키·OAuth 토큰을 다룰 수 있다")와 `docs/06_UI_UX_SPEC.md` §6("라이선스 또는 인증 설정 필요")가 이미 이 상황을 예견하고 있었음
 - 결과: OQ-004 RESOLVED. `src/infrastructure/providers/tiingo/`, `src/infrastructure/security/`, `src/infrastructure/http/tauriHttpClient.ts`, `src/application/ports/apiKeyStore.ts`, `src/app/composition.ts`(다중 Provider), `src/features/session-setup/ProviderApiKeyField.tsx`, `docs/providers/TIINGO.md`
 - 재검토 조건: Tiingo 이용조건·요금제가 바뀌거나, 재배포 라이선스를 구매하기로 결정할 때, macOS/Linux 지원이 추가되어 `keyring` crate의 다른 백엔드 검증이 필요할 때
+
+## D-016: 제품 표시명을 Chart Reminder로 되돌림
+
+- 상태: Accepted
+- 맥락: M7 종료 후 사용자가 실제 제품명은 "Chart Reminder"였음을 확인 — D-014의 "CashOS" 확정은 잘못된 전제(로컬 폴더명·GitHub 원격 저장소명만 보고 판단)에 근거한 결정이었음
+- 선택:
+  - 표시명을 "Chart Reminder"로 변경 — `tauri.conf.json`(`productName`, 창 제목), `index.html` `<title>`, `src/app/appInfo.ts`의 `name`, 세션 설정 화면 제목, 세션 CSV 내보내기 헤더 주석, `src-tauri/Cargo.toml`의 `description`, `README.md`·`GOAL.md` 제목에 반영
+  - D-014와 동일하게 Tauri `identifier`(`com.investmentreplay.dev`), npm 패키지명(`investment-replay`), Cargo 패키지명, SQLite 캐시 DB 파일명(`investment-replay.db`)은 변경하지 않음 — 재설치·데이터 경로 단절 방지
+  - **버그 수정**: M7(D-015)에서 추가된 keyring(Windows 자격 증명 관리자) 저장 키 접두사가 `cashos.provider-api-key.*`로 표시명을 그대로 사용하고 있었음 — D-014의 "내부 식별자는 표시명과 분리해 안정적으로 유지" 원칙을 M7이 위반한 것. 표시명이 바뀔 때마다 저장된 BYOK 키가 유실되는 문제를 막기 위해 `investment-replay.provider-api-key.*`(다른 내부 식별자와 동일한 안정적 접두사)로 수정. 이 세션엔 아직 실 키로 저장한 사용자가 없어 마이그레이션 없이 안전하게 변경 가능
+- 이유: 표시명은 언제든 바뀔 수 있는 정보이므로 애초에 내부 저장 키·경로에 섞여서는 안 됨. 이번 수정으로 향후 표시명이 다시 바뀌어도 저장된 데이터가 끊기지 않는다
+- 결과: OQ-001 재확정. 위 파일 목록에 반영
+- 재검토 조건: 표시명을 다시 바꿔야 할 필요가 생길 때 (이번엔 내부 식별자에 영향 없음을 먼저 확인)
 
 ## 새 결정 템플릿
 

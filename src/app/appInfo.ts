@@ -8,7 +8,7 @@ export interface AppInfo {
 }
 
 export const APP_INFO: AppInfo = {
-  name: "CashOS",
+  name: "Chart Reminder",
   tagline:
     "과거의 특정 시점으로 돌아가 여러 자산에 투자 규칙을 적용했을 때, " +
     "가격과 내 자산가치가 시간에 따라 어떻게 전개됐는지 재생·비교하는 Windows 데스크톱 앱",

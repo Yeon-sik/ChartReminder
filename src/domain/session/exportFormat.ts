@@ -94,7 +94,7 @@ export function buildPortfolioCsv(
   assets: readonly PortfolioCsvAssetInput[],
 ): string {
   const lines: string[] = [
-    `# CashOS portfolio export`,
+    `# Chart Reminder portfolio export`,
     `# generated_at_utc: ${new Date(generatedAtUtcMs).toISOString()}`,
     CSV_COLUMNS.join(","),
   ];

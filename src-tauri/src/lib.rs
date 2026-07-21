@@ -8,9 +8,14 @@ fn write_export_file(path: String, contents: String) -> Result<(), String> {
 
 /// BYOK Provider API 키를 Windows 자격 증명 관리자(OS 보안 저장소)에 저장한다 (D-015, docs/09 §2).
 /// 앱은 이 키를 평문 SQLite나 파일에 저장하지 않는다.
+/// 저장 키 접두사는 표시명이 아니라 안정적 내부 식별자(investment-replay, D-007/D-014)를 쓴다 —
+/// 그래야 표시명이 바뀌어도(D-016) 이미 저장된 키가 유실되지 않는다.
 fn api_key_entry(provider_id: &str) -> Result<keyring::Entry, String> {
-    keyring::Entry::new(&format!("cashos.provider-api-key.{provider_id}"), "default")
-        .map_err(|error| error.to_string())
+    keyring::Entry::new(
+        &format!("investment-replay.provider-api-key.{provider_id}"),
+        "default",
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

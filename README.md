@@ -1,4 +1,4 @@
-# CashOS
+# Chart Reminder
 
 과거의 특정 시점으로 돌아가 투자 규칙을 적용했을 때 자산가치가 어떻게 전개됐는지 재생·비교하는 Windows 데스크톱 앱. Tauri 2 + React + TypeScript + Vite.
 
