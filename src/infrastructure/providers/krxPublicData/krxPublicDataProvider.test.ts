@@ -87,7 +87,7 @@ const SAMSUNG = KRX_PUBLIC_DATA_INSTRUMENTS[0];
 
 function makeProvider(
   responses: FakeResponse[],
-  options: { clock?: Clock; apiKey?: string | null } = {},
+  options: { clock?: Clock; apiKey?: string | null; baseUrl?: string } = {},
 ) {
   const httpClient = new FakeHttpClient(responses);
   const provider = new KrxPublicDataProvider({
@@ -97,6 +97,7 @@ function makeProvider(
     maxAttempts: 3,
     baseDelayMs: 1,
     sleep: () => Promise.resolve(),
+    baseUrl: options.baseUrl,
   });
   return { provider, httpClient };
 }
@@ -141,6 +142,8 @@ describe("KrxPublicDataProvider.getCandles 정규화 계약", () => {
     expect(batch.completeRange).toEqual(query(0, 2).range);
     expect(httpClient.requestedUrls[0]).toContain("likeSrtnCd=005930");
     expect(httpClient.requestedUrls[0]).toContain("beginBasDt=20240101");
+    // endBasDt는 배타적이다(실 키로 확인, D-019) — 반개구간 끝(2024-01-03)을 그대로 보낸다.
+    expect(httpClient.requestedUrls[0]).toContain("endBasDt=20240103");
     expect(httpClient.requestedUrls[0]).toContain("serviceKey=test-key");
   });
 
@@ -216,7 +219,8 @@ describe("KrxPublicDataProvider 미완성 캔들 처리", () => {
     const batch = await provider.getCandles(query(0, 5));
     expect(batch.candles.map((c) => c.tradingDate)).toEqual(["2024-01-01", "2024-01-02"]);
     expect(batch.completeRange).toEqual({ startMs: JAN_1, endMs: Date.UTC(2024, 0, 3) });
-    expect(httpClient.requestedUrls[0]).toContain("endBasDt=20240102");
+    // endBasDt는 배타적이다(D-019) — 반개구간 끝(2024-01-03)을 그대로 보낸다(하루 빼지 않음).
+    expect(httpClient.requestedUrls[0]).toContain("endBasDt=20240103");
   });
 
   it("전부 미래인 범위는 HTTP 요청 없이 빈 배치와 null 커버리지를 반환한다", async () => {
@@ -225,6 +229,39 @@ describe("KrxPublicDataProvider 미완성 캔들 처리", () => {
     expect(batch.candles).toEqual([]);
     expect(batch.completeRange).toBeNull();
     expect(httpClient.requestedUrls).toEqual([]);
+  });
+});
+
+describe("KrxPublicDataProvider baseUrl 정규화 (D-019)", () => {
+  it("오퍼레이션 경로 없이 서비스 루트만 주어져도 자동으로 보정한다", async () => {
+    const { provider, httpClient } = makeProvider([{ kind: "ok", body: envelope([item(JAN_1)]) }], {
+      baseUrl: "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService",
+    });
+    await provider.getCandles(query(0, 1));
+    expect(httpClient.requestedUrls[0]).toMatch(
+      /^https:\/\/apis\.data\.go\.kr\/1160100\/service\/GetStockSecuritiesInfoService\/getStockPriceInfo\?/,
+    );
+  });
+
+  it("끝에 슬래시가 붙어도 중복 없이 보정한다", async () => {
+    const { provider, httpClient } = makeProvider([{ kind: "ok", body: envelope([item(JAN_1)]) }], {
+      baseUrl: "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/",
+    });
+    await provider.getCandles(query(0, 1));
+    expect(httpClient.requestedUrls[0]).toMatch(
+      /^https:\/\/apis\.data\.go\.kr\/1160100\/service\/GetStockSecuritiesInfoService\/getStockPriceInfo\?/,
+    );
+  });
+
+  it("이미 완전한 오퍼레이션 경로가 주어지면 그대로 쓴다", async () => {
+    const { provider, httpClient } = makeProvider([{ kind: "ok", body: envelope([item(JAN_1)]) }], {
+      baseUrl:
+        "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/getStockPriceInfo",
+    });
+    await provider.getCandles(query(0, 1));
+    expect(httpClient.requestedUrls[0]).toMatch(
+      /^https:\/\/apis\.data\.go\.kr\/1160100\/service\/GetStockSecuritiesInfoService\/getStockPriceInfo\?/,
+    );
   });
 });
 

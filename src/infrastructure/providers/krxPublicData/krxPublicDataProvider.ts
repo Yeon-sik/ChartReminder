@@ -19,10 +19,21 @@ import type { HttpClient } from "../../http/httpClient";
 import { KRX_PUBLIC_DATA_INSTRUMENTS, KRX_PUBLIC_DATA_PROVIDER_ID } from "./krxPublicDataCatalog";
 
 const DAY_MS = 86_400_000;
+const OPERATION_PATH = "/getStockPriceInfo";
 const DEFAULT_BASE_URL =
-  "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/getStockPriceInfo";
+  "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService" + OPERATION_PATH;
 const ROWS_PER_PAGE = 500;
 const MAX_PAGES = 50;
+
+/**
+ * `baseUrl` 오버라이드(.env `OPEN_API_ENDPOINT`, D-018)가 서비스 루트까지만 가리켜도
+ * 동작하도록 오퍼레이션 경로를 보정한다 — 실 키로 확인한 결과, 이 경로가 빠지면 이 서비스는
+ * 조용히 빈 결과를 주지 않고 정상 요청 자체가 성립하지 않는다(D-019).
+ */
+function normalizeBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  return trimmed.endsWith(OPERATION_PATH) ? trimmed : `${trimmed}${OPERATION_PATH}`;
+}
 
 export interface KrxPublicDataProviderOptions {
   readonly httpClient: HttpClient;
@@ -95,7 +106,7 @@ export class KrxPublicDataProvider implements MarketDataProvider {
     this.httpClient = options.httpClient;
     this.getApiKey = options.getApiKey;
     this.clock = options.clock ?? systemClock;
-    this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.maxAttempts = options.maxAttempts ?? 3;
     this.baseDelayMs = options.baseDelayMs ?? 500;
     this.sleep = options.sleep ?? defaultSleep;
@@ -169,8 +180,11 @@ export class KrxPublicDataProvider implements MarketDataProvider {
     range: { startMs: number; endMs: number },
   ): Promise<unknown[]> {
     const beginBasDt = toBasDt(new Date(range.startMs).toISOString().slice(0, 10));
-    // endMs는 반개구간의 끝이므로 하루를 뺀 날짜가 포함(inclusive) 종료일이다.
-    const endBasDt = toBasDt(new Date(range.endMs - DAY_MS).toISOString().slice(0, 10));
+    // 실 키로 확인(D-019): 이 API의 endBasDt는 배타적(exclusive)이다 — beginBasDt=20260720,
+    // endBasDt=20260720(같은 날)이나 endBasDt=20260716(그날 포함 의도)은 그 날짜를 결과에서
+    // 제외했고, endBasDt=20260721이어야 20260720이 포함됐다. 문서·커뮤니티 자료가 흔히
+    // 서술하는 "포함 범위"와 다르다. 우리 range도 반개구간이라 날짜 변환 없이 그대로 쓴다.
+    const endBasDt = toBasDt(new Date(range.endMs).toISOString().slice(0, 10));
 
     const rows: unknown[] = [];
     let totalCount: number | null = null;
