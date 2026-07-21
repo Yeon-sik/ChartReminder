@@ -18,6 +18,8 @@ import { SqliteSessionRepository } from "../infrastructure/persistence/sqliteSes
 import { openTauriSqlDatabase } from "../infrastructure/persistence/tauriSqlDatabase";
 import { BINANCE_PROVIDER_ID } from "../infrastructure/providers/binance/binanceCatalog";
 import { BinanceProvider } from "../infrastructure/providers/binance/binanceProvider";
+import { KRX_PUBLIC_DATA_PROVIDER_ID } from "../infrastructure/providers/krxPublicData/krxPublicDataCatalog";
+import { KrxPublicDataProvider } from "../infrastructure/providers/krxPublicData/krxPublicDataProvider";
 import { TiingoProvider } from "../infrastructure/providers/tiingo/tiingoProvider";
 import { TIINGO_PROVIDER_ID } from "../infrastructure/providers/tiingo/tiingoCatalog";
 import { InMemoryApiKeyStore } from "../infrastructure/security/inMemoryApiKeyStore";
@@ -85,21 +87,30 @@ export function getAppComposition(): Promise<AppComposition> {
       // BYOK 키는 Provider 생성 시점이 아니라 호출 시점에 읽는다 — setApiKey로 저장한
       // 새 키가 Provider 재생성 없이 즉시 반영되도록 이 mutable 홀더를 공유한다 (D-015).
       const apiKeys = new Map<string, string>();
-      const tiingoKey = await apiKeyStore.get(TIINGO_PROVIDER_ID);
-      if (tiingoKey !== null) {
-        apiKeys.set(TIINGO_PROVIDER_ID, tiingoKey);
+      for (const providerId of [TIINGO_PROVIDER_ID, KRX_PUBLIC_DATA_PROVIDER_ID]) {
+        const key = await apiKeyStore.get(providerId);
+        if (key !== null) {
+          apiKeys.set(providerId, key);
+        }
       }
 
       const providers = new Map<string, MarketDataProvider>();
       providers.set(BINANCE_PROVIDER_ID, new BinanceProvider({ httpClient: fetchHttpClient }));
-      // Tiingo는 CORS를 지원하지 않아 Tauri HTTP 플러그인이 있는 데스크톱 런타임에서만 동작한다
-      // (브라우저 프리뷰는 SQLite 영속성이 없는 것과 같은 종류의 제약, M5 §2).
+      // Tiingo·공공데이터포털 모두 CORS를 지원하지 않아 Tauri HTTP 플러그인이 있는 데스크톱
+      // 런타임에서만 동작한다(브라우저 프리뷰는 SQLite 영속성이 없는 것과 같은 종류의 제약, M5 §2).
       if (runtime === "tauri") {
         providers.set(
           TIINGO_PROVIDER_ID,
           new TiingoProvider({
             httpClient: tauriHttpClient,
             getApiKey: () => apiKeys.get(TIINGO_PROVIDER_ID) ?? null,
+          }),
+        );
+        providers.set(
+          KRX_PUBLIC_DATA_PROVIDER_ID,
+          new KrxPublicDataProvider({
+            httpClient: tauriHttpClient,
+            getApiKey: () => apiKeys.get(KRX_PUBLIC_DATA_PROVIDER_ID) ?? null,
           }),
         );
       }

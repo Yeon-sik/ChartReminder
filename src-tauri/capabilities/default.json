@@ -10,7 +10,7 @@
     "dialog:allow-save",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://api.tiingo.com/*" }],
+      "allow": [{ "url": "https://api.tiingo.com/*" }, { "url": "https://apis.data.go.kr/*" }],
       "deny": []
     }
   ]

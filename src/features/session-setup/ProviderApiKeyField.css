@@ -16,6 +16,13 @@
   font-size: 0.85rem;
 }
 
+.provider-api-key__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 .provider-api-key__status {
   margin: 0;
   font-weight: 500;

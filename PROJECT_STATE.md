@@ -4,12 +4,23 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M7 — 미국 주식 Provider
+- 현재 마일스톤: M8 — 한국 주식 Provider
 - 상태: DONE
-- 마지막 갱신: 2026-07-19
+- 마지막 갱신: 2026-07-21
 
 ## 완료된 마일스톤
 
+- M8 — 한국 주식 Provider (2026-07-21)
+  - OQ-005 RESOLVED(D-017): 공공데이터포털(data.go.kr) "금융위원회_주식시세정보"(`GetStockSecuritiesInfoService`), **BYOK** — D-015(Tiingo)와 동일 원칙. 한국투자증권 Open API(무료지만 증권 계좌 개설 전제)보다 진입장벽이 낮아 채택
+  - `src/infrastructure/providers/krxPublicData/`: `KrxPublicDataProvider`(BYOK 키 미설정은 `ProviderAuthError`, data.go.kr 표준 `resultCode` 봉투를 `00`/`03`(NODATA→빈 결과)/`22`(한도초과→`ProviderRateLimitError`)/`20·21·30·31·32·33`(인증·권한→`ProviderAuthError`)/`04·05`(일시적→`ProviderNetworkError`)/기타(`ProviderResponseError`)로 매핑, `numOfRows`/`pageNo` 페이지네이션을 Provider 내부에서 결합하고 `totalCount` 미달 시 실패), `KRX_PUBLIC_DATA_INSTRUMENTS`(대형주 5종 큐레이션: 삼성전자·SK하이닉스·NAVER·카카오·현대차)
+  - 이 API는 수정주가를 제공하지 않는다 — 모든 캔들이 `priceBasis: "raw"`, `adjustedClose`는 항상 undefined. 시뮬레이션 엔진의 기존 raw-close 폴백(M4)을 그대로 재사용해 엔진 변경 없음
+  - **보안 수정**: Tiingo(Authorization 헤더)와 달리 이 API는 `serviceKey`를 쿼리 파라미터로만 받는다 — 재시도 소진 시 오류 메시지에 URL을 포함해야 해서, `redactServiceKey()`로 키 값을 지운 뒤에만 메시지에 넣도록 구현(docs/09 §2, 회귀 테스트 포함)
+  - HTTP 전송·키 저장은 M7 인프라를 그대로 재사용(신규 Rust 코드 없음): `tauriHttpClient`(capability에 `https://apis.data.go.kr/*` 추가), keyring 기반 `ApiKeyStore`(D-016에서 표시명과 분리해 둔 `investment-replay.provider-api-key.<providerId>` 접두사 덕분에 새 Provider 추가가 저장 경로 변경 없이 가능)
+  - `src/app/composition.ts`: 3번째 Provider(`krx-public-data`) 등록, BYOK 키 로드 루프를 Tiingo·KRX 공통으로 일반화. `src/App.tsx`: 카탈로그 병합에 KRX 추가, 두 번째 `ProviderApiKeyField`(Encoding/Decoding 키 주의 안내 포함— `ProviderApiKeyField`에 선택적 `note` prop 추가)
+  - `docs/providers/KRX_PUBLIC_DATA.md`: 데이터 의미·엔드포인트·`resultCode` 매핑·이용조건·정규화 규칙 기록(docs/09 §5). `resultCode` 표는 data.go.kr 플랫폼 공통 규격에 근거한 것으로, 이 서비스 전용 문서에서 직접 확인하지 못해 실 키 검증이 필요한 항목으로 명시
+  - 검증: `npm run verify`(format/lint/typecheck/428 tests/cargo check) PASS, `npm run build` PASS. KRX Provider 계약 테스트 24개(정규화·범위 절단·정렬·중복 제거·likeSrtnCd 오검색 방어·resultCode 매핑·페이지네이션 결합·serviceKey 로그 미노출 등)
+  - 브라우저 프리뷰 스모크: Playwright MCP로 `npm run dev` 확인 — 크립토 카탈로그만 노출(KRX·Tiingo 모두 미등록, 설계대로), 콘솔 오류 없음(파비콘 404 제외)
+  - **미검증**: 실 data.go.kr 무료 키로 종단 확인(BYOK 입력 → 크립토+한국 주식 혼합 세션 → 재생) — 이 세션에는 실 키가 없어 수행하지 못함(Tiingo와 동일한 남은 위험). `resultCode` 표·응답 봉투 구조(`items.item` 단일/배열 등)도 실 키로 최초 확인 필요
 - M7 — 미국 주식 Provider (2026-07-19)
   - OQ-004 RESOLVED(D-015): 조사 결과 검토한 모든 무료 API(Alpha Vantage·Tiingo·Twelve Data·Financial Modeling Prep)가 "본인 이용"과 "앱의 불특정 최종사용자에게 재배포"를 구분하고 후자는 유료 계약을 요구함 확인 → **BYOK(Bring-Your-Own-Key)** 채택: 앱은 데이터를 재배포하지 않고 각 사용자가 자신의 무료 키를 직접 입력
   - Provider: **Tiingo**(`GET /tiingo/daily/<ticker>/prices`) — 무료 티어에서 원시 OHLC와 수정주가(adjClose 등)를 함께 제공하는 유일한 후보였음(D-015 근거 상세)
@@ -93,23 +104,24 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - **UI 연결 완료(M5)**: 자산 1~2개 선택(서로 다른 투자 규칙 허용) → 데이터 조회 → 재생(재생/일시정지/한 단계/처음으로/속도, 키보드 지원) → 가격·투자금 차트 → 결과 요약까지 전체 흐름 동작. 로딩·오류·데이터 경고(상장 이전·중간 누락) 상태 포함
 - **세션 저장·불러오기, CSV/JSON 내보내기(M6)**: 세션(자산·기간·표시 기준·시뮬레이션 설정·재생 속도·데이터 버전)을 SQLite(Tauri)/메모리(브라우저 프리뷰)에 저장·불러오기, 현재 세션을 JSON으로, 포트폴리오 시계열을 CSV(출처·가정 헤더 포함)로 내보내기(Tauri 네이티브 저장 대화상자)
 - **미국 주식(M7, BYOK)**: Tiingo 대형주 5종(AAPL·MSFT·GOOGL·AMZN·NVDA) — 사용자가 자신의 무료 Tiingo API 키를 입력하면 암호화폐 자산과 함께(최대 2개 비교) 조회 가능. 키는 Windows 자격 증명 관리자에 저장. Tauri 데스크톱 런타임에서만 동작(브라우저 프리뷰는 크립토만)
+- **한국 주식(M8, BYOK)**: 공공데이터포털 대형주 5종(삼성전자·SK하이닉스·NAVER·카카오·현대차) — 사용자가 자신의 무료 data.go.kr 서비스 키를 입력하면 암호화폐·미국 주식과 함께(최대 2개 비교) 조회 가능. 수정주가는 제공하지 않음(원시 시세만). Tauri 데스크톱 런타임에서만 동작
 
 ## 검증 상태
 
 | 검증 | 상태 | 마지막 명령 | 비고 |
 |---|---|---|---|
-| Format | PASS | `npm run format:check` | 2026-07-19, Prettier 3.9 |
-| Lint | PASS | `npm run lint` | 2026-07-19, ESLint 10 flat config |
-| Typecheck | PASS | `npm run typecheck` | 2026-07-19, tsc strict |
-| Unit test | PASS | `npm run test` | 2026-07-19, Vitest 4 + jsdom, 404개 통과 + live 1개 skip |
-| Integration test | PASS | `npm run test` | Provider 계약(Binance+Tiingo) + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
-| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, Binance 대상 2026-07-14 수동 1회 PASS 이후 재실행 안 함. Tiingo용 live smoke는 아직 없음(실 키 필요) |
-| Cargo check | PASS | `npm run check:rust` | 2026-07-19, `tauri-plugin-dialog`+`tauri-plugin-http`+`keyring` 추가 반영 |
-| npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함 |
-| Production build | PASS | `npm run build` | 2026-07-19, tsc + vite build (M7 변경 포함 재검증) |
-| Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`) 포함한 재빌드는 아직 안 함 — `cargo check`만 확인 |
+| Format | PASS | `npm run format:check` | 2026-07-21, Prettier 3.9 |
+| Lint | PASS | `npm run lint` | 2026-07-21, ESLint 10 flat config |
+| Typecheck | PASS | `npm run typecheck` | 2026-07-21, tsc strict |
+| Unit test | PASS | `npm run test` | 2026-07-21, Vitest 4 + jsdom, 428개 통과 + live 1개 skip |
+| Integration test | PASS | `npm run test` | Provider 계약(Binance+Tiingo+공공데이터포털) + SQLite(better-sqlite3) + use case + React 컴포넌트 통합 + 세션 저장소 포함 |
+| Live API smoke | PASS (opt-in) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, Binance 대상 2026-07-14 수동 1회 PASS 이후 재실행 안 함. Tiingo·공공데이터포털용 live smoke는 아직 없음(실 키 필요) |
+| Cargo check | PASS | `npm run check:rust` | 2026-07-21, M8은 신규 Rust 의존성 없음(M7의 keyring 경로 재사용) |
+| npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함. M8은 신규 npm 의존성 없음 |
+| Production build | PASS | `npm run build` | 2026-07-21, tsc + vite build (M8 변경 포함 재검증) |
+| Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`) 포함한 재빌드는 아직 안 함 — `cargo check`만 확인. M8은 신규 Rust 의존성 없어 이 재빌드 필요성에 영향 없음 |
 | 설치 테스트 | 부분 PASS (M6 시점) | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19(M6), 이 머신에서 1회 확인. MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증. M7 이후 재검증 안 함 |
-| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 2026-07-19: 설정 화면 로드, 크립토 카탈로그만 노출(Tiingo 미등록 설계대로), 콘솔 오류 없음(파비콘 404 제외) 확인. M6 세션 저장·내보내기, M7 Tiingo 데이터 조회(BYOK 키 입력→실 데이터→재생)는 Tauri 데스크톱 런타임이 필요해 브라우저 프리뷰로 검증 불가 — `npm run tauri dev` + 실 Tiingo 키로 사용자 확인 필요 |
+| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 2026-07-21: 설정 화면 로드, 크립토 카탈로그만 노출(Tiingo·공공데이터포털 모두 미등록, 설계대로), 콘솔 오류 없음(파비콘 404 제외) 확인. M6 세션 저장·내보내기, M7 Tiingo·M8 공공데이터포털 데이터 조회(BYOK 키 입력→실 데이터→재생)는 Tauri 데스크톱 런타임이 필요해 브라우저 프리뷰로 검증 불가 — `npm run tauri dev` + 실 키로 사용자 확인 필요 |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
 
@@ -130,19 +142,22 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 차트 라이브러리: TradingView Lightweight Charts v5 (D-013). CORS 확인 완료(`data-api.binance.vision`이 `Access-Control-Allow-Origin: *` 응답), 공식 React 튜토리얼 패턴(`createChart` + `addSeries(LineSeries)` + `setData`) 채택
 - 조합 루트 런타임 분기: `isTauri()`(`@tauri-apps/api/core`)로 Tauri에서는 SqliteCandleRepository, 브라우저 프리뷰(Playwright 검증용)에서는 InMemoryCandleRepository 주입 (D-013)
 - 미국 주식 Provider: Tiingo, BYOK 모델 (D-015, OQ-004 RESOLVED). 키는 Rust `keyring` crate로 Windows 자격 증명 관리자에 저장. CORS 미지원이라 Tiingo 전용으로 `tauri-plugin-http` 도입(Binance는 기존 `fetchHttpClient` 유지)
-- 다중 Provider 조합: `AppComposition.providers`가 providerId → Provider 맵을 보관하고, `prepareReplaySession`이 자산마다 알맞은 Provider를 조회 (D-015) — 향후 한국 주식(M8) 추가도 같은 패턴 재사용 가능
+- 다중 Provider 조합: `AppComposition.providers`가 providerId → Provider 맵을 보관하고, `prepareReplaySession`이 자산마다 알맞은 Provider를 조회 (D-015) — M8에서 실제로 3번째 Provider(공공데이터포털)를 같은 패턴으로 추가해 재사용성 검증됨
+- 한국 주식 Provider: 공공데이터포털(data.go.kr) "금융위원회_주식시세정보", BYOK 모델 (D-017, OQ-005 RESOLVED). Tiingo와 동일한 `tauriHttpClient`·keyring 저장 경로 재사용(신규 Rust 의존성 없음). 이 API는 수정주가를 제공하지 않음(원시 시세만)
 
 ## 열린 문제
 
-- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-004·OQ-007 RESOLVED)
+- `docs/OPEN_QUESTIONS.md` 참조 (OQ-001·OQ-002·OQ-004·OQ-005·OQ-007 RESOLVED)
 - GitHub 원격 저장소 생성됨(`Yeon-sik/CashOS.git`), CI 워크플로 자체는 아직 없음 (D-008). D-016으로 표시명이 Chart Reminder로 바뀌어 원격 저장소명·draft GitHub Release(`v0.1.0-alpha`, `CashOS_0.1.0_x64...` 설치 파일 첨부)가 이제 표시명과 불일치 — 저장소 이름 변경·릴리스 자산 교체 여부는 외부 시스템 변경이라 사용자 판단 필요, Claude가 임의로 변경하지 않음
 - 다크 모드 명암비는 토큰 값으로만 검토했고 OS 다크모드 전환으로 직접 스크린샷 검증하지는 못함(Playwright MCP에 media emulation 도구 없음, M5부터 이어지는 항목)
 - M6 남은 위험: MSI(all-users) 설치는 관리자 권한 환경에서 미검증(이 세션은 비관리자 셸). 진짜 "신규 환경"(별도 물리·가상 머신) 설치 테스트는 아직 없음. GitHub Release는 draft 상태로 유지 중이며 게시(publish)는 사용자 판단 필요
 - M7 남은 위험: (1) 실 Tiingo 키로 종단 검증 미실시 — 이 세션에 실 API 키가 없어 BYOK 키 입력→저장→암호화폐/미국 주식 혼합 세션→재생→수정주가 토글의 실제 데이터 흐름은 사용자가 `npm run tauri dev`로 1회 확인 필요. (2) Tiingo의 "HTTP 200 + 평문 할당량 초과 응답" 분류는 공식 문서가 아니라 관찰(GitHub 이슈)에 근거한 휴리스틱이라 문구가 바뀌면 갱신 필요. (3) M6 시점 `.msi`/`.exe`는 M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)을 포함해 재빌드되지 않음 — 다음 릴리스 전 `npm run tauri build` 재실행 필요
+- M8 남은 위험: (1) 실 data.go.kr 키로 종단 검증 미실시 — 이 세션에 실 서비스 키가 없어 BYOK 키 입력→저장→한국 주식 데이터 조회→재생의 실제 흐름은 사용자가 `npm run tauri dev`로 1회 확인 필요. (2) `resultCode` 오류 매핑(`00`/`03`/`22`/`20·21·30·31·32·33`/`04·05`)은 data.go.kr 플랫폼 공통 규격에 근거한 것이지 이 서비스 전용 공식 문서로 직접 확인한 것이 아니다 — 실 키로 최소 정상 응답(`00`)과 인증 실패(잘못된 키) 한 번씩은 확인 필요. (3) `response.body.items.item`이 단일 항목일 때 배열이 아니라 단일 객체로 오는지도 실 키 없이는 확인 불가(코드는 두 형태 모두 방어적으로 처리하도록 작성했으나 미검증)
 
 ## 다음 작업
 
-1. 실 Tiingo 무료 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 암호화폐+미국 주식 혼합 세션 → 수정주가 토글 → 재생) — 사용자 진행 중
-2. `npm run tauri build`로 재빌드 — M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 D-016 표시명 변경(`Chart Reminder_0.1.0_x64...`) 반영
-3. M8 — 한국 주식 Provider(OQ-005)
-4. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, GitHub 원격 저장소명·draft Release 이름 정리 여부 결정
+1. 실 Tiingo 무료 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 암호화폐+미국 주식 혼합 세션 → 수정주가 토글 → 재생)
+2. 실 data.go.kr 무료 서비스 키로 `npm run tauri dev` 종단 확인(BYOK 입력 → 한국 주식 데이터 조회 → 재생) — `resultCode` 매핑·`items.item` 형태 실검증 겸함
+3. `npm run tauri build`로 재빌드 — M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 D-016 표시명 변경(`Chart Reminder_0.1.0_x64...`) 반영(M8은 신규 Rust 의존성 없음)
+4. M9 — 통합 MVP Release(암호화폐·미국·한국 주식 지원 범위 정리, 설치 검증)
+5. (선택) MSI 설치를 관리자 권한 환경 또는 별도 머신에서 재검증, GitHub 원격 저장소명·draft Release 이름 정리 여부 결정

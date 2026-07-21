@@ -177,6 +177,27 @@
 - 결과: OQ-001 재확정. 위 파일 목록에 반영
 - 재검토 조건: 표시명을 다시 바꿔야 할 필요가 생길 때 (이번엔 내부 식별자에 영향 없음을 먼저 확인)
 
+## D-017: 한국 주식 Provider — 공공데이터포털(data.go.kr), BYOK
+
+- 상태: Accepted
+- 맥락: M8. OQ-005(한국 주식 데이터 공급자와 공개 범위)를 확정해야 함. 공식 문서·커뮤니티 자료를 직접 확인한 결과(2026-07-21, WebSearch/WebFetch), 두 후보를 비교함
+  - 한국투자증권(KIS) Open API: 무료지만 실제 증권 계좌 개설이 전제 조건 — Tiingo처럼 이메일만으로 즉시 발급되는 개인 무료 키와 성격이 다르고, BYOK치고는 진입장벽이 지나치게 높음
+  - 공공데이터포털(data.go.kr) "금융위원회_주식시세정보"(`GetStockSecuritiesInfoService`): data.go.kr 개인 계정만으로 자동승인 발급, 원데이터 소유자는 한국거래소(KRX). "이용허락범위 제한없음"으로 명시되어 있고 상업/재배포 제약이 별도로 언급되지 않음
+- 선택:
+  - **Provider**: 공공데이터포털 "금융위원회_주식시세정보"(`GET https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/getStockPriceInfo`). 무료, 자동승인, 개발계정 일 10,000회(운영계정은 활용사례 등록 시 증량 가능)
+  - **BYOK(Bring-Your-Own-Key)**: D-015와 동일 원칙 — 앱은 데이터를 재배포하지 않고, 각 사용자가 data.go.kr에 직접 가입해 발급받은 자신의 무료 서비스 키를 앱에 입력한다. 저장은 기존 `ApiKeyStore`/keyring 경로를 그대로 재사용(신규 Rust 코드 불필요 — D-016에서 저장 키 접두사를 표시명과 분리해 둔 덕에 Provider가 늘어나도 `investment-replay.provider-api-key.<providerId>` 패턴만 따르면 됨)
+  - **HTTP 전송**: 이 API도 CORS를 지원하지 않는다(공공데이터포털 API 일반적으로 프록시 없이 브라우저 직접 호출이 불가하다는 점이 다수 자료로 확인됨) — 기존 `tauriHttpClient`(D-015에서 도입)를 재사용하고, capability를 `https://apis.data.go.kr/*`로 추가 스코프. 브라우저 프리뷰에는 등록하지 않음(Tiingo와 동일 제약)
+  - **서비스 키 형식**: data.go.kr은 "Encoding"/"Decoding" 두 종류의 키를 발급한다 — 이미 URL 인코딩된 값을 그대로 쓰거나(Encoding), 원문 값에 앱이 직접 인코딩을 적용하거나(Decoding) 둘 중 하나만 써야 하며 섞으면 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 난다. 이 앱은 `encodeURIComponent`를 항상 적용하므로 사용자가 "Decoding"(일반 인증키, 평문) 값을 입력해야 한다 — `docs/providers/KRX_PUBLIC_DATA.md`에 명시
+  - **오류 매핑**: data.go.kr 표준 OpenAPI 응답 봉투(`response.header.resultCode`)를 사용한다. `03`(NODATA)은 오류가 아니라 빈 결과, `22`는 `ProviderRateLimitError`(일일 한도 초과, 비재시도), `20/21/30/31/32/33`(키 미등록·서비스 거부 등)은 `ProviderAuthError`, `04/05`(HTTP_ERROR/SERVICETIME_OUT)는 `ProviderNetworkError`(재시도 대상), 그 외는 `ProviderResponseError`로 분류
+  - **수정주가 없음**: 이 API는 원시 시세만 제공하고 분할·배당 조정가를 제공하지 않는다 — `Candle.adjustedClose`는 항상 undefined, `priceBasis: "raw"`. 시뮬레이션 엔진은 이미 `adjustedClose` 부재 시 원시 종가로 폴백하므로(M4) 엔진 변경 없이 안전
+  - **KST 거래일**: 별도 휴장일 캘린더를 두지 않는다 — Binance·Tiingo와 동일하게 "공급자가 그 날짜의 행을 반환하지 않으면 비거래일"로 취급한다(응답에 없는 날은 상장 이전·중간 누락 판정 로직이 이미 처리, M5)
+  - **페이지네이션**: 이 API는 `numOfRows`/`pageNo`로 명시적으로 페이지네이션한다 — Binance(D-010)와 동일하게 Provider 내부에서 페이지를 모두 모아 결합하고, `totalCount`에 못 미치면 무한루프 대신 `ProviderResponseError`로 실패한다(부분 성공을 전체 성공으로 위장하지 않음, docs/03 §3)
+  - **자산 카탈로그**: 전체 KRX 상장 종목이 아니라 대형주 5종(삼성전자 005930·SK하이닉스 000660·NAVER 035420·카카오 035720·현대차 005380)만 큐레이션 — Tiingo와 동일한 범위 원칙
+- 대안: 한국투자증권 KIS Open API(계좌 개설 전제라 기각), KRX 자체 Data Marketplace(유료 라이선스 전제로 보여 기각), 네이버/다음 금융 비공식 스크래핑(라이선스 근거 없음이라 기각)
+- 이유: 공공데이터포털 계정은 Tiingo 가입만큼 가볍고(이메일 인증 후 즉시), "이용허락범위 제한없음"이 명시돼 있어 D-015와 같은 BYOK 논리(재배포 관계 자체가 생기지 않음)를 그대로 적용할 수 있음
+- 결과: OQ-005 RESOLVED. `src/infrastructure/providers/krxPublicData/`, `src/app/composition.ts`(3번째 Provider 등록), `src/features/session-setup`(두 번째 `ProviderApiKeyField`), `src-tauri/capabilities/default.json`, `docs/providers/KRX_PUBLIC_DATA.md`
+- 재검토 조건: data.go.kr 이용약관이 바뀌거나, `resultCode` 표(D-017 근거)가 실제 키로 검증한 결과와 다르게 확인될 때, 더 많은 종목이나 수정주가가 필요해질 때
+
 ## 새 결정 템플릿
 
 ```text

@@ -9,6 +9,8 @@ export interface ProviderApiKeyFieldProps {
   readonly providerId: string;
   readonly label: string;
   readonly signupUrl: string;
+  /** 공급자별 추가 안내(예: 키 형식 주의사항). 없으면 표시하지 않는다. */
+  readonly note?: string;
 }
 
 type Status =
@@ -28,6 +30,7 @@ export function ProviderApiKeyField({
   providerId,
   label,
   signupUrl,
+  note,
 }: ProviderApiKeyFieldProps) {
   const [status, setStatus] = useState<Status>({ kind: "loading" });
   const [input, setInput] = useState("");
@@ -87,6 +90,7 @@ export function ProviderApiKeyField({
         무료 개인 키를 발급받아 입력하세요 ({signupUrl}). 앱은 이 키를 이 기기의 OS 보안 저장소에만
         저장하고, 서버로 전송하거나 다른 사용자와 공유하지 않습니다.
       </p>
+      {note !== undefined && <p className="provider-api-key__note">{note}</p>}
 
       {status.kind === "loading" && <p role="status">확인하는 중입니다…</p>}
 

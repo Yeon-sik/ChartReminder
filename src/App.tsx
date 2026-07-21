@@ -13,6 +13,10 @@ import { SessionSetupForm } from "./features/session-setup/SessionSetupForm";
 import type { RestoredSession } from "./features/session-setup/sessionPersistenceModel";
 import { BINANCE_INSTRUMENTS } from "./infrastructure/providers/binance/binanceCatalog";
 import {
+  KRX_PUBLIC_DATA_INSTRUMENTS,
+  KRX_PUBLIC_DATA_PROVIDER_ID,
+} from "./infrastructure/providers/krxPublicData/krxPublicDataCatalog";
+import {
   TIINGO_INSTRUMENTS,
   TIINGO_PROVIDER_ID,
 } from "./infrastructure/providers/tiingo/tiingoCatalog";
@@ -55,9 +59,14 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [nextSessionId, setNextSessionId] = useState(1);
   const hasTiingo = composition?.providers.has(TIINGO_PROVIDER_ID) ?? false;
+  const hasKrxPublicData = composition?.providers.has(KRX_PUBLIC_DATA_PROVIDER_ID) ?? false;
   const availableInstruments = useMemo(
-    () => (hasTiingo ? [...BINANCE_INSTRUMENTS, ...TIINGO_INSTRUMENTS] : BINANCE_INSTRUMENTS),
-    [hasTiingo],
+    () => [
+      ...BINANCE_INSTRUMENTS,
+      ...(hasTiingo ? TIINGO_INSTRUMENTS : []),
+      ...(hasKrxPublicData ? KRX_PUBLIC_DATA_INSTRUMENTS : []),
+    ],
+    [hasTiingo, hasKrxPublicData],
   );
   const instrumentCatalogById = useMemo(
     () => Object.fromEntries(availableInstruments.map((instrument) => [instrument.id, instrument])),
@@ -114,6 +123,15 @@ function App() {
             providerId={TIINGO_PROVIDER_ID}
             label="Tiingo(미국 주식) API 키"
             signupUrl="tiingo.com"
+          />
+        )}
+        {hasKrxPublicData && (
+          <ProviderApiKeyField
+            composition={composition}
+            providerId={KRX_PUBLIC_DATA_PROVIDER_ID}
+            label="공공데이터포털(한국 주식) API 키"
+            signupUrl="data.go.kr"
+            note="마이페이지에서 발급된 두 키 중 '일반 인증키(Decoding)' 값을 입력하세요. 'Encoding' 값을 넣으면 인증에 실패합니다."
           />
         )}
         <SessionSetupForm
