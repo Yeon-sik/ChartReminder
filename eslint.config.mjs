@@ -5,7 +5,13 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist/", "src-tauri/target/", "src-tauri/gen/", "node_modules/"]),
+  globalIgnores([
+    "dist/",
+    "src-tauri/target/",
+    "src-tauri/gen/",
+    "node_modules/",
+    ".github/project-docs/",
+  ]),
   {
     files: ["**/*.{ts,tsx,js,mjs}"],
     extends: [js.configs.recommended, tseslint.configs.recommended],

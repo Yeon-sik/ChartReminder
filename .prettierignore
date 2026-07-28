@@ -4,6 +4,7 @@ node_modules/
 src-tauri/target/
 src-tauri/gen/
 package-lock.json
+.github/project-docs/
 
 # Markdown docs are the project kit's source of truth; do not reformat them.
 *.md
