@@ -8,11 +8,17 @@ function baseProps(overrides: Partial<PlaybackControlsProps> = {}): PlaybackCont
     status: "ready",
     currentDate: "2024-01-01",
     speed: 1,
+    cursor: 0,
+    startIndex: 0,
+    endIndex: 4,
+    firstDate: "2024-01-01",
+    lastDate: "2024-01-05",
     onPlay: vi.fn(),
     onPause: vi.fn(),
     onStepForward: vi.fn(),
     onRestart: vi.fn(),
     onSetSpeed: vi.fn(),
+    onSeek: vi.fn(),
     ...overrides,
   };
 }
@@ -53,6 +59,59 @@ describe("PlaybackControls — 버튼", () => {
   it("현재 상태와 날짜를 텍스트로 보여준다 (차트 대체 텍스트, docs/06 §7)", () => {
     render(<PlaybackControls {...baseProps({ status: "paused", currentDate: "2024-03-15" })} />);
     expect(screen.getByText(/일시정지/)).toHaveTextContent("2024-03-15");
+  });
+});
+
+describe("PlaybackControls — 진행바(seek) (docs/06 §2, §5)", () => {
+  it("범위를 startIndex~endIndex로, 현재 값을 cursor로 표시한다", () => {
+    render(<PlaybackControls {...baseProps({ cursor: 2, startIndex: 0, endIndex: 4 })} />);
+    const seek = screen.getByLabelText("재생 진행바") as HTMLInputElement;
+    expect(seek.min).toBe("0");
+    expect(seek.max).toBe("4");
+    expect(seek.value).toBe("2");
+  });
+
+  it("슬라이더를 옮기면 onSeek을 인덱스로 호출한다", () => {
+    const onSeek = vi.fn();
+    render(<PlaybackControls {...baseProps({ onSeek })} />);
+    fireEvent.change(screen.getByLabelText("재생 진행바"), { target: { value: "3" } });
+    expect(onSeek).toHaveBeenCalledWith(3);
+  });
+
+  it("idle 상태에서는 진행바가 비활성화된다", () => {
+    render(<PlaybackControls {...baseProps({ status: "idle", currentDate: null })} />);
+    expect(screen.getByLabelText("재생 진행바")).toBeDisabled();
+  });
+
+  it("완료 상태에서도 진행바로 되감을 수 있다", () => {
+    render(<PlaybackControls {...baseProps({ status: "completed" })} />);
+    expect(screen.getByLabelText("재생 진행바")).toBeEnabled();
+  });
+
+  it("첫 날짜와 마지막 날짜를 진행바 양끝에 표시한다", () => {
+    render(
+      <PlaybackControls {...baseProps({ firstDate: "2024-01-01", lastDate: "2024-06-30" })} />,
+    );
+    expect(screen.getByText("2024-01-01")).toBeInTheDocument();
+    expect(screen.getByText("2024-06-30")).toBeInTheDocument();
+  });
+
+  it("현재 진행도를 텍스트와 aria-valuetext로 함께 보여준다", () => {
+    render(
+      <PlaybackControls
+        {...baseProps({
+          cursor: 2,
+          startIndex: 0,
+          endIndex: 4,
+          currentDate: "2024-01-03",
+        })}
+      />,
+    );
+    expect(screen.getByText("3/5일 · 60%")).toBeInTheDocument();
+    expect(screen.getByLabelText("재생 진행바")).toHaveAttribute(
+      "aria-valuetext",
+      "2024-01-03 · 3/5일 · 60%",
+    );
   });
 });
 

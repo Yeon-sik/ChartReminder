@@ -14,7 +14,7 @@ import type { CandleRepository } from "../ports/candleRepository";
 import type { MarketDataProvider } from "../ports/marketDataProvider";
 import { ensureCandleRangeCached } from "./ensureCandleRangeCached";
 
-const MAX_SELECTIONS = 2;
+const MAX_SELECTIONS = 3;
 
 export interface AssetSelection {
   readonly instrument: Instrument;

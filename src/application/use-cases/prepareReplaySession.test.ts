@@ -337,9 +337,26 @@ describe("prepareReplaySession — 오류", () => {
     ).rejects.toThrow(DomainValidationError);
   });
 
-  it("자산 3개 이상을 거부한다", async () => {
+  it("자산 3개는 허용한다", async () => {
     const deps = {
       providers: providersOf(new FakeProvider()),
+      repository: new InMemoryFakeRepository(),
+    };
+    const third: Instrument = { ...BTC, id: "crypto-sol-usdt", symbol: "SOL/USDT" };
+    const result = await prepareReplaySession(deps, {
+      selections: [
+        { instrument: BTC, simulationConfig: lumpSum() },
+        { instrument: ETH, simulationConfig: lumpSum() },
+        { instrument: third, simulationConfig: lumpSum() },
+      ],
+      range: fullRange(),
+    });
+    expect(Object.keys(result.resultsByInstrumentId)).toEqual([BTC.id, ETH.id, third.id]);
+  });
+
+  it("자산 4개 이상을 거부한다", async () => {
+    const deps = {
+      providers: providersOf(new FakeProvider(), new FakeProvider({ id: "fake-2" })),
       repository: new InMemoryFakeRepository(),
     };
     const third: Instrument = { ...BTC, id: "crypto-sol-usdt", symbol: "SOL/USDT" };
@@ -349,6 +366,7 @@ describe("prepareReplaySession — 오류", () => {
           { instrument: BTC, simulationConfig: lumpSum() },
           { instrument: ETH, simulationConfig: lumpSum() },
           { instrument: third, simulationConfig: lumpSum() },
+          { instrument: AAPL, simulationConfig: lumpSum() },
         ],
         range: fullRange(),
       }),

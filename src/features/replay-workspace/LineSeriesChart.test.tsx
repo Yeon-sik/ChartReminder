@@ -97,4 +97,24 @@ describe("LineSeriesChart", () => {
     const { getByRole } = render(<LineSeriesChart lines={[line()]} ariaLabel="가격 차트 설명" />);
     expect(getByRole("img", { name: "가격 차트 설명" })).toBeInTheDocument();
   });
+
+  it("valueUnit을 지정하면 축 눈금 포맷터가 값 뒤에 단위를 붙인다", () => {
+    render(<LineSeriesChart lines={[line()]} ariaLabel="테스트 차트" valueUnit="USD" />);
+
+    const call = applyOptionsMock.mock.calls.find(
+      ([options]) => options?.localization?.priceFormatter !== undefined,
+    );
+    expect(call).toBeDefined();
+    const [{ localization }] = call as [
+      { localization: { priceFormatter: (p: number) => string } },
+    ];
+    expect(localization.priceFormatter(1234.5)).toBe("1234.50 USD");
+  });
+
+  it("valueUnit이 없으면 포맷터를 지정하지 않는다(기본 숫자 표시)", () => {
+    render(<LineSeriesChart lines={[line()]} ariaLabel="테스트 차트" />);
+
+    const call = applyOptionsMock.mock.calls.find(([options]) => "localization" in (options ?? {}));
+    expect(call?.[0].localization.priceFormatter).toBeUndefined();
+  });
 });

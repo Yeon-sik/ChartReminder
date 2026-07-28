@@ -41,13 +41,28 @@ export interface AssetPriceSeries {
   readonly instrumentId: string;
   readonly label: string;
   readonly points: ChartPoint[];
+  /**
+   * 재생 커서 시점 기준 실제 가격("시점 기준 현재가") — 항상 자산 고유 통화로 표기한다.
+   * 표시 기준(`normalized-100`/`cumulative-return`)이 지수·비율이라 실제 가격 감각을
+   * 잃지 않도록 차트와 별개로 함께 보여준다(docs/00 "비교의 의미"). 관측이 없으면 null.
+   */
+  readonly currentPrice: Money | null;
+  readonly currentPriceDate: TradingDate | null;
+}
+
+export interface PortfolioAssetValue {
+  readonly instrumentId: string;
+  readonly label: string;
+  readonly totalValue: ChartPoint[];
 }
 
 export interface PortfolioSeries {
-  readonly instrumentId: string;
-  readonly label: string;
+  /**
+   * 통합 투자 설정(D-020)에 따라 비교 자산 전체에 같은 투자 규칙(모드·금액·주기)이
+   * 적용되므로, 표시 통화 기준 기여 원금은 자산마다 동일하다 — 하나만 반환한다.
+   */
   readonly contributedCapital: ChartPoint[];
-  readonly totalValue: ChartPoint[];
+  readonly assets: readonly PortfolioAssetValue[];
 }
 
 export interface ResultSummaryRow {
@@ -124,18 +139,27 @@ export function buildPriceSeries(
       displayCurrency,
       usdKrwRate,
     );
+    const lastIndex = rawPrices.length - 1;
 
     return {
       instrumentId,
       label: instrumentLabel(instrument),
       points: dates.map((time, index) => ({ time, value: toChartNumber(transformed[index]) })),
+      currentPrice:
+        lastIndex >= 0
+          ? { amount: rawPrices[lastIndex], currency: instrument.quoteCurrency }
+          : null,
+      currentPriceDate: lastIndex >= 0 ? dates[lastIndex] : null,
     };
   });
 }
 
 /**
- * 자산별 원금/평가액 차트 시리즈. `cursorIndex`까지만 자른다 (위 R6 규칙과 동일).
+ * 원금/평가액 차트 시리즈. `cursorIndex`까지만 자른다 (위 R6 규칙과 동일).
  * 금액은 표시 통화로 환산해 반환한다(D-020) — 서로 다른 통화 자산도 같은 스케일로 비교 가능.
+ *
+ * 기여 원금은 통합 투자 설정(D-020)상 자산 간 동일해 첫 번째 결과에서만 뽑아 하나로
+ * 통합한다 — 자산별 평가액(`assets[].totalValue`)만 각각 반환한다.
  */
 export function buildPortfolioSeries(
   resultsByInstrumentId: Readonly<Record<string, SimulationResult>>,
@@ -143,24 +167,25 @@ export function buildPortfolioSeries(
   cursorIndex: number,
   displayCurrency: DisplayCurrency,
   usdKrwRate: UsdKrwRate | null,
-): PortfolioSeries[] {
-  return Object.entries(resultsByInstrumentId).map(([instrumentId, result]) => {
-    const visible = result.snapshots.slice(0, cursorIndex + 1);
-    return {
-      instrumentId,
-      label: instrumentLabel(instrumentsById[instrumentId]),
-      contributedCapital: visible.map((s) => ({
-        time: s.date,
-        value: toChartNumber(
-          convertMoney(s.contributedCapital, displayCurrency, usdKrwRate).amount,
-        ),
-      })),
-      totalValue: visible.map((s) => ({
-        time: s.date,
-        value: toChartNumber(convertMoney(s.totalValue, displayCurrency, usdKrwRate).amount),
-      })),
-    };
-  });
+): PortfolioSeries {
+  const entries = Object.entries(resultsByInstrumentId);
+  const [, firstResult] = entries[0];
+
+  const contributedCapital = firstResult.snapshots.slice(0, cursorIndex + 1).map((s) => ({
+    time: s.date,
+    value: toChartNumber(convertMoney(s.contributedCapital, displayCurrency, usdKrwRate).amount),
+  }));
+
+  const assets: PortfolioAssetValue[] = entries.map(([instrumentId, result]) => ({
+    instrumentId,
+    label: instrumentLabel(instrumentsById[instrumentId]),
+    totalValue: result.snapshots.slice(0, cursorIndex + 1).map((s) => ({
+      time: s.date,
+      value: toChartNumber(convertMoney(s.totalValue, displayCurrency, usdKrwRate).amount),
+    })),
+  }));
+
+  return { contributedCapital, assets };
 }
 
 /**

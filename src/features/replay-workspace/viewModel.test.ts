@@ -190,6 +190,33 @@ describe("buildPriceSeries — 미래 데이터 비노출 (R6)", () => {
     expect(series.points.map((p) => p.time)).toEqual(["2024-01-03", "2024-01-04"]);
   });
 
+  it("시점 기준 현재가는 커서까지의 마지막 관측가를 자산 고유 통화로 반환한다", () => {
+    const [series] = buildPriceSeries(
+      dataset,
+      { [GOLDEN_INSTRUMENT.id]: GOLDEN_INSTRUMENT },
+      "normalized-100",
+      2,
+      "KRW",
+      RATE,
+    );
+    // 커서 2일차(종가 90)는 표시 통화(KRW)로 환산하지 않고 자산 고유 통화(USD) 그대로다.
+    expect(series.currentPrice).toEqual({ amount: "90", currency: "USD" });
+    expect(series.currentPriceDate).toBe("2024-01-03");
+  });
+
+  it("관측 없는 자산의 시점 기준 현재가는 null이다", () => {
+    const [series] = buildPriceSeries(
+      dataset,
+      { [LATE_INSTRUMENT.id]: LATE_INSTRUMENT },
+      "normalized-100",
+      1,
+      "USD",
+      null,
+    );
+    expect(series.currentPrice).toBeNull();
+    expect(series.currentPriceDate).toBeNull();
+  });
+
   it("자산 라벨은 표시명과 심볼을 포함한다", () => {
     const [series] = buildPriceSeries(
       dataset,
@@ -205,39 +232,42 @@ describe("buildPriceSeries — 미래 데이터 비노출 (R6)", () => {
 
 describe("buildPortfolioSeries — 미래 데이터 비노출 (R6)", () => {
   it("cursorIndex 이후 스냅샷은 포함하지 않는다", () => {
-    const [series] = buildPortfolioSeries(
-      resultsByInstrumentId,
-      instrumentsById,
-      2,
-      "USD",
-      null,
-    ).filter((s) => s.instrumentId === GOLDEN_INSTRUMENT.id);
+    const result = buildPortfolioSeries(resultsByInstrumentId, instrumentsById, 2, "USD", null);
+    const [series] = result.assets.filter((s) => s.instrumentId === GOLDEN_INSTRUMENT.id);
 
     expect(series.totalValue.map((p) => p.value)).toEqual([1000, 1100, 900]);
     expect(series.totalValue).toHaveLength(3);
+    expect(result.contributedCapital).toHaveLength(3);
   });
 
   it("완료 시점(cursorIndex=4)에는 전체 스냅샷이 드러난다", () => {
-    const [series] = buildPortfolioSeries(
-      resultsByInstrumentId,
-      instrumentsById,
-      4,
-      "USD",
-      null,
-    ).filter((s) => s.instrumentId === GOLDEN_INSTRUMENT.id);
+    const result = buildPortfolioSeries(resultsByInstrumentId, instrumentsById, 4, "USD", null);
+    const [series] = result.assets.filter((s) => s.instrumentId === GOLDEN_INSTRUMENT.id);
     expect(series.totalValue.map((p) => p.value)).toEqual([1000, 1100, 900, 1200, 1200]);
   });
 
   it("표시 통화가 다른 자산은 환산된 값으로 나온다 (D-020)", () => {
-    const [series] = buildPortfolioSeries(
+    const result = buildPortfolioSeries(
       krwResultsByInstrumentId,
       krwInstrumentsById,
       4,
       "USD",
       RATE,
-    ).filter((s) => s.instrumentId === KRW_INSTRUMENT.id);
+    );
+    const [series] = result.assets.filter((s) => s.instrumentId === KRW_INSTRUMENT.id);
     // KRW 1000 → USD 1000/1400, 이후 총자산도 같은 비율로 환산
     expect(series.totalValue[0].value).toBeCloseTo(1000 / 1400, 6);
+  });
+
+  it("기여 원금은 통합 투자 설정상 자산 간 동일해 하나로만 반환한다 (D-020 완전 통합)", () => {
+    const result = buildPortfolioSeries(resultsByInstrumentId, instrumentsById, 4, "USD", null);
+    // 두 자산(GOLDEN_INSTRUMENT, LATE_INSTRUMENT) 모두 lumpSumConfig(1000 USD 원금)로
+    // 시뮬레이션했으므로 자산별로 따로 반환하지 않고 한 선(1000, 이후 변화 없음)만 반환한다.
+    expect(result.contributedCapital.map((p) => p.value)).toEqual([1000, 1000, 1000, 1000, 1000]);
+    expect(result.assets.map((a) => a.instrumentId)).toEqual([
+      GOLDEN_INSTRUMENT.id,
+      LATE_INSTRUMENT.id,
+    ]);
   });
 });
 
