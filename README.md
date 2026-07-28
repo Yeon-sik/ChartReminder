@@ -6,6 +6,9 @@
 - 개발 규칙: `CLAUDE.md`
 - 현재 진행 상태: `PROJECT_STATE.md`
 - 명세: `docs/`
+- 프로젝트 소개: [`docs/Project_Intro.md`](docs/Project_Intro.md)
+- 기술 상세: [`docs/Project_Detail.md`](docs/Project_Detail.md)
+- Notion 미러 운영: [`docs/PROJECT_DOCS_OPERATIONS.md`](docs/PROJECT_DOCS_OPERATIONS.md)
 
 ## 개발 환경
 
