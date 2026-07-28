@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { InstrumentSearchResult } from "../../application/use-cases/searchInstruments";
@@ -36,7 +36,7 @@ function ok(instruments: Instrument[]): Promise<InstrumentSearchResult> {
 }
 
 describe("InstrumentSearchField", () => {
-  it("현재 선택된 자산의 표시명을 입력값으로 보여준다", () => {
+  it("현재 선택된 자산의 표시명을 트리거 버튼에 보여준다", () => {
     render(
       <InstrumentSearchField
         label="자산 1"
@@ -46,10 +46,11 @@ describe("InstrumentSearchField", () => {
         onSelect={vi.fn()}
       />,
     );
-    expect(screen.getByLabelText("자산 1")).toHaveValue("Bitcoin (BTC/USDT)");
+    expect(screen.getByLabelText(/자산 1:/)).toHaveTextContent("Bitcoin (BTC/USDT)");
+    expect(screen.getByText("BINANCE · USDT")).toBeInTheDocument();
   });
 
-  it("포커스하면 빈 질의로 검색해 기본 추천을 보여준다", async () => {
+  it("버튼을 누르면 검색 모달이 열리고 빈 질의로 기본 추천을 보여준다", async () => {
     const search = vi.fn(() => ok([AAPL]));
     render(
       <InstrumentSearchField
@@ -61,13 +62,15 @@ describe("InstrumentSearchField", () => {
       />,
     );
 
-    fireEvent.focus(screen.getByLabelText("자산 1"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/자산 1:/));
 
+    expect(await screen.findByRole("dialog", { name: "자산 1 검색" })).toBeInTheDocument();
     await waitFor(() => expect(search).toHaveBeenCalledWith(""));
-    expect(await screen.findByRole("button", { name: "Apple Inc. (AAPL)" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Apple Inc\. \(AAPL\)/ })).toBeInTheDocument();
   });
 
-  it("결과를 클릭하면 onSelect가 호출되고 입력창이 선택값으로 되돌아간다", async () => {
+  it("결과를 클릭하면 onSelect가 호출되고 모달이 닫힌다", async () => {
     const onSelect = vi.fn();
     render(
       <InstrumentSearchField
@@ -79,10 +82,11 @@ describe("InstrumentSearchField", () => {
       />,
     );
 
-    fireEvent.focus(screen.getByLabelText("자산 1"));
-    fireEvent.click(await screen.findByRole("button", { name: "Apple Inc. (AAPL)" }));
+    fireEvent.click(screen.getByLabelText(/자산 1:/));
+    fireEvent.click(await screen.findByRole("button", { name: /Apple Inc\. \(AAPL\)/ }));
 
     expect(onSelect).toHaveBeenCalledWith(AAPL);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("excludeIds에 있는 자산은 결과에서 제외한다", async () => {
@@ -96,10 +100,15 @@ describe("InstrumentSearchField", () => {
       />,
     );
 
-    fireEvent.focus(screen.getByLabelText("자산 2"));
+    fireEvent.click(screen.getByLabelText(/자산 2:/));
 
-    expect(await screen.findByRole("button", { name: "Bitcoin (BTC/USDT)" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Apple Inc. (AAPL)" })).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "자산 2 검색" });
+    expect(
+      await within(dialog).findByRole("button", { name: /Bitcoin \(BTC\/USDT\)/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: /Apple Inc\. \(AAPL\)/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("검색 오류는 alert로 보여준다", async () => {
@@ -118,7 +127,78 @@ describe("InstrumentSearchField", () => {
       />,
     );
 
-    fireEvent.focus(screen.getByLabelText("자산 1"));
+    fireEvent.click(screen.getByLabelText(/자산 1:/));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
+
+  it("닫기 버튼으로 모달을 닫으면 선택은 그대로 유지된다", async () => {
+    const onSelect = vi.fn();
+    render(
+      <InstrumentSearchField
+        label="자산 1"
+        selected={BTC}
+        excludeIds={new Set()}
+        search={() => ok([AAPL])}
+        onSelect={onSelect}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText(/자산 1:/));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "검색 닫기" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/자산 1:/)).toHaveTextContent("Bitcoin (BTC/USDT)");
+  });
+
+  it("모달을 닫으면 트리거 버튼으로 포커스를 복원한다", async () => {
+    render(
+      <InstrumentSearchField
+        label="자산 1"
+        selected={BTC}
+        excludeIds={new Set()}
+        search={() => ok([AAPL])}
+        onSelect={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByLabelText(/자산 1:/);
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    await screen.findByRole("dialog");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "검색 닫기" }));
+
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it.each(["Escape", "배경 클릭"] as const)(
+    "%s로 모달을 닫아도 트리거 버튼으로 포커스를 복원한다",
+    async (closeMethod) => {
+      render(
+        <InstrumentSearchField
+          label="자산 1"
+          selected={BTC}
+          excludeIds={new Set()}
+          search={() => ok([AAPL])}
+          onSelect={vi.fn()}
+        />,
+      );
+      const trigger = screen.getByLabelText(/자산 1:/);
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = await screen.findByRole("dialog");
+
+      if (closeMethod === "Escape") {
+        fireEvent.keyDown(window, { key: "Escape" });
+      } else {
+        fireEvent.click(dialog.parentElement as HTMLElement);
+      }
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    },
+  );
 });

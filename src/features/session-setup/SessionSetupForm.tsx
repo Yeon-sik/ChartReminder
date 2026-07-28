@@ -30,8 +30,13 @@ export interface SessionSetupFormProps {
   ) => void;
 }
 
-const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
-  raw: "원시 가격",
+/**
+ * 선택 가능한 가격변화 표시 기준. "raw"(원시 가격)는 자산이 여러 개일 때 통화·규모가
+ * 서로 달라 절대가로는 비교가 되지 않아 새 세션에서는 고를 수 없게 뺐다 — 차트는 항상
+ * 상대적 변화 추이를 기준으로 움직인다. (기존에 raw로 저장된 세션은 계속 그대로 재생된다,
+ * ReplayWorkspace가 displayMode를 그대로 받기 때문.)
+ */
+const DISPLAY_MODE_LABELS: Record<Exclude<DisplayMode, "raw">, string> = {
   "normalized-100": "시작점 100",
   "cumulative-return": "누적 수익률",
 };
@@ -55,7 +60,7 @@ export function SessionSetupForm({
     () => new Set(state.assets.map((instrument) => instrument.id)),
     [state.assets],
   );
-  const canAddAsset = state.assets.length < 2;
+  const canAddAsset = state.assets.length < 3;
 
   function updateInvestment(patch: Partial<InvestmentSettingsFormState>): void {
     setState((prev) => ({ ...prev, investment: { ...prev.investment, ...patch } }));
@@ -104,51 +109,55 @@ export function SessionSetupForm({
     <form className="session-setup" onSubmit={handleSubmit}>
       <h1>Chart Reminder 설정</h1>
       <p className="session-setup__hint">
-        과거 시점으로 돌아가 자산 1~2개에 동일한 투자 규칙을 적용했을 때 자산 가치가 어떻게 변했는지
+        과거 시점으로 돌아가 자산 1~3개에 동일한 투자 규칙을 적용했을 때 자산 가치가 어떻게 변했는지
         재생합니다. 투자 금액은 표시 통화({displayCurrency}) 기준으로 입력하며, 자산 고유 통화로
         자동 환산됩니다(설정 탭에서 표시 통화를 바꿀 수 있습니다).
       </p>
 
-      <fieldset>
-        <legend>기간</legend>
-        <label>
-          시작일
-          <input
-            type="date"
-            value={state.startDate}
-            onChange={(event) => setState((prev) => ({ ...prev, startDate: event.target.value }))}
-            required
-          />
-        </label>
-        <label>
-          종료일
-          <input
-            type="date"
-            value={state.endDate}
-            onChange={(event) => setState((prev) => ({ ...prev, endDate: event.target.value }))}
-            required
-          />
-        </label>
-      </fieldset>
+      {/* 기간·표시 기준은 이미 합리적 기본값이 채워진 보조 설정이라, 비교 자산·투자 설정 같은
+          핵심 결정보다 가볍게(sunken 배경, 한 행) 보여준다. */}
+      <div className="session-setup__quick-row">
+        <fieldset className="session-setup__quick">
+          <legend>기간</legend>
+          <label>
+            시작일
+            <input
+              type="date"
+              value={state.startDate}
+              onChange={(event) => setState((prev) => ({ ...prev, startDate: event.target.value }))}
+              required
+            />
+          </label>
+          <label>
+            종료일
+            <input
+              type="date"
+              value={state.endDate}
+              onChange={(event) => setState((prev) => ({ ...prev, endDate: event.target.value }))}
+              required
+            />
+          </label>
+        </fieldset>
 
-      <fieldset>
-        <legend>표시 기준</legend>
-        <label>
-          가격 차트 기준
-          <select
-            value={state.displayMode}
-            onChange={(event) =>
-              setState((prev) => ({ ...prev, displayMode: event.target.value as DisplayMode }))
-            }
-          >
-            {(Object.keys(DISPLAY_MODE_LABELS) as DisplayMode[]).map((mode) => (
-              <option key={mode} value={mode}>
-                {DISPLAY_MODE_LABELS[mode]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
+        <fieldset className="session-setup__quick">
+          <legend>표시 기준</legend>
+          <label>
+            가격변화 기준
+            <select
+              value={state.displayMode}
+              onChange={(event) =>
+                setState((prev) => ({ ...prev, displayMode: event.target.value as DisplayMode }))
+              }
+            >
+              {(Object.keys(DISPLAY_MODE_LABELS) as Exclude<DisplayMode, "raw">[]).map((mode) => (
+                <option key={mode} value={mode}>
+                  {DISPLAY_MODE_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+      </div>
 
       <fieldset>
         <legend>비교 자산</legend>
@@ -175,8 +184,8 @@ export function SessionSetupForm({
         ))}
 
         {canAddAsset && (
-          <button type="button" onClick={addAsset}>
-            비교 자산 추가 (최대 2개)
+          <button type="button" className="session-setup__add" onClick={addAsset}>
+            + 비교 자산 추가 (최대 3개)
           </button>
         )}
       </fieldset>
@@ -218,6 +227,15 @@ export function SessionSetupForm({
           </label>
         ) : (
           <>
+            <label>
+              초기 투자 비용 ({displayCurrency}, 선택)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={investment.dcaInitialCash}
+                onChange={(event) => updateInvestment({ dcaInitialCash: event.target.value })}
+              />
+            </label>
             <label>
               납입액 ({displayCurrency})
               <input

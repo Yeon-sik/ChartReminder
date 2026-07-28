@@ -37,13 +37,18 @@ describe("SessionSetupForm", () => {
     expect(instrumentsById[BTC.id]).toBe(BTC);
   });
 
-  it("자산을 추가하면 2번째 자산 선택이 나타나고, 2개가 되면 추가 버튼이 사라진다", () => {
+  it("자산을 추가하면 2번째, 3번째 자산 선택이 나타나고, 3개가 되면 추가 버튼이 사라진다", () => {
     renderForm();
 
     expect(screen.queryByLabelText("자산 2")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /비교 자산 추가/ }));
 
     expect(screen.getByLabelText("자산 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /비교 자산 추가/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /비교 자산 추가/ }));
+
+    expect(screen.getByLabelText("자산 3")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /비교 자산 추가/ })).not.toBeInTheDocument();
   });
 
@@ -66,6 +71,23 @@ describe("SessionSetupForm", () => {
     expect(screen.queryByLabelText(/원금/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/납입액/)).toBeInTheDocument();
     expect(screen.getByLabelText("주기")).toBeInTheDocument();
+  });
+
+  it("정기 정액매수의 초기 투자 비용은 기본 0이고, 지정하면 제출 요청에 반영된다", () => {
+    const onSubmit = renderForm();
+    fireEvent.click(screen.getByLabelText("정기 정액매수"));
+
+    const initialCostInput = screen.getByLabelText(/초기 투자 비용/);
+    expect(initialCostInput).toHaveValue("0");
+
+    fireEvent.change(initialCostInput, { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "시뮬레이션 준비" }));
+
+    const [request] = onSubmit.mock.calls[0];
+    expect(request.selections[0].simulationConfig.initialCash).toEqual({
+      amount: "500",
+      currency: "USDT",
+    });
   });
 
   it("시작일이 종료일보다 늦으면 오류를 보여주고 onSubmit을 호출하지 않는다", () => {

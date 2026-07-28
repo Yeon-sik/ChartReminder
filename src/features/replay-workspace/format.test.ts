@@ -41,7 +41,7 @@ describe("formatPercent", () => {
 
 describe("formatPriceStatus", () => {
   it("fresh와 carried-forward를 구분한다", () => {
-    expect(formatPriceStatus("fresh")).toContain("실시간");
+    expect(formatPriceStatus("fresh")).toContain("해당일");
     expect(formatPriceStatus("carried-forward")).toContain("이월");
   });
 });
@@ -127,8 +127,8 @@ describe("formatProviderError — docs/06 §6 서로 다른 문구", () => {
 
   it("DomainValidationError는 메시지를 그대로 사용자에게 보여준다", () => {
     expect(
-      formatProviderError(new DomainValidationError("자산은 최대 2개까지 비교할 수 있다")),
-    ).toBe("자산은 최대 2개까지 비교할 수 있다");
+      formatProviderError(new DomainValidationError("자산은 최대 3개까지 비교할 수 있다")),
+    ).toBe("자산은 최대 3개까지 비교할 수 있다");
   });
 
   it("알 수 없는 오류는 일반 문구로 대체하고 스택을 노출하지 않는다", () => {

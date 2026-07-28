@@ -11,11 +11,18 @@ export interface PlaybackControlsProps {
   readonly status: ReplayStatus;
   readonly currentDate: TradingDate | null;
   readonly speed: ReplaySpeed;
+  /** 진행바 범위·위치 (docs/06 §2, §5 — seek는 MVP에서 허용). */
+  readonly cursor: number;
+  readonly startIndex: number;
+  readonly endIndex: number;
+  readonly firstDate: TradingDate;
+  readonly lastDate: TradingDate;
   readonly onPlay: () => void;
   readonly onPause: () => void;
   readonly onStepForward: () => void;
   readonly onRestart: () => void;
   readonly onSetSpeed: (speed: ReplaySpeed) => void;
+  readonly onSeek: (index: number) => void;
 }
 
 const STATUS_LABELS: Record<ReplayStatus, string> = {
@@ -67,6 +74,13 @@ function StepForwardIcon() {
   );
 }
 
+function formatReplayProgress(cursor: number, startIndex: number, endIndex: number): string {
+  const completed = cursor - startIndex + 1;
+  const total = endIndex - startIndex + 1;
+  const percent = total <= 0 ? 0 : Math.round((completed / total) * 100);
+  return `${completed}/${total}일 · ${percent}%`;
+}
+
 /**
  * 재생 제어. (docs/06 §5)
  *
@@ -77,15 +91,24 @@ export function PlaybackControls({
   status,
   currentDate,
   speed,
+  cursor,
+  startIndex,
+  endIndex,
+  firstDate,
+  lastDate,
   onPlay,
   onPause,
   onStepForward,
   onRestart,
   onSetSpeed,
+  onSeek,
 }: PlaybackControlsProps) {
   const canStep = status === "ready" || status === "paused";
   const canPlay = status === "ready" || status === "paused";
   const canRestart = status !== "idle" && status !== "error";
+  // ReplayEngine.seekToIndex도 이 두 상태에서만 거부한다 (replayEngine.ts).
+  const canSeek = status !== "idle" && status !== "error";
+  const progressLabel = formatReplayProgress(cursor, startIndex, endIndex);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -119,43 +142,65 @@ export function PlaybackControls({
 
   return (
     <div className="playback-controls">
-      <button type="button" onClick={onRestart} disabled={!canRestart} aria-label="처음으로">
-        <RestartIcon />
-        처음으로
-      </button>
-      {status === "playing" ? (
-        <button type="button" onClick={onPause}>
-          <PauseIcon />
-          일시정지
+      <div className="playback-controls__row">
+        <button type="button" onClick={onRestart} disabled={!canRestart} aria-label="처음으로">
+          <RestartIcon />
+          처음으로
         </button>
-      ) : (
-        <button type="button" onClick={onPlay} disabled={!canPlay}>
-          <PlayIcon />
-          재생
+        {status === "playing" ? (
+          <button type="button" onClick={onPause}>
+            <PauseIcon />
+            일시정지
+          </button>
+        ) : (
+          <button type="button" onClick={onPlay} disabled={!canPlay}>
+            <PlayIcon />
+            재생
+          </button>
+        )}
+        <button type="button" onClick={onStepForward} disabled={!canStep} aria-label="한 단계 전진">
+          <StepForwardIcon />한 단계
         </button>
-      )}
-      <button type="button" onClick={onStepForward} disabled={!canStep} aria-label="한 단계 전진">
-        <StepForwardIcon />한 단계
-      </button>
 
-      <label className="playback-controls__speed">
-        속도
-        <select
-          value={speed}
-          onChange={(event) => onSetSpeed(Number(event.target.value) as ReplaySpeed)}
-        >
-          {REPLAY_SPEEDS.map((option) => (
-            <option key={option} value={option}>
-              {option}x
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="playback-controls__speed">
+          속도
+          <select
+            value={speed}
+            onChange={(event) => onSetSpeed(Number(event.target.value) as ReplaySpeed)}
+          >
+            {REPLAY_SPEEDS.map((option) => (
+              <option key={option} value={option}>
+                {option}x
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <p className="playback-controls__status" aria-live="polite">
-        {STATUS_LABELS[status]}
-        {currentDate !== null && ` · ${currentDate}`}
-      </p>
+        <p className="playback-controls__status" aria-live="polite">
+          {STATUS_LABELS[status]}
+          {currentDate !== null && ` · ${currentDate}`}
+        </p>
+      </div>
+
+      <div className="playback-controls__seek-row">
+        <span className="playback-controls__seek-date">{firstDate}</span>
+        <input
+          type="range"
+          className="playback-controls__seek"
+          aria-label="재생 진행바"
+          aria-valuetext={
+            currentDate === null ? progressLabel : `${currentDate} · ${progressLabel}`
+          }
+          min={startIndex}
+          max={endIndex}
+          step={1}
+          value={cursor}
+          disabled={!canSeek}
+          onChange={(event) => onSeek(Number(event.target.value))}
+        />
+        <span className="playback-controls__progress">{progressLabel}</span>
+        <span className="playback-controls__seek-date">{lastDate}</span>
+      </div>
     </div>
   );
 }

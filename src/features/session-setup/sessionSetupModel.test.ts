@@ -80,6 +80,32 @@ describe("buildPrepareReplaySessionRequest — 정상 경로 (통합 투자 설�
     });
   });
 
+  it("정기매수 모드는 초기 투자 비용을 기본값 0으로 둔다", () => {
+    const state = baseState({
+      investment: { ...defaultInvestmentSettings(), mode: "dca" },
+    });
+    const request = buildPrepareReplaySessionRequest(state, "USD", null);
+
+    expect(request.selections[0].simulationConfig.initialCash).toEqual({
+      amount: "0",
+      currency: "USDT",
+    });
+  });
+
+  it("정기매수 모드에서 초기 투자 비용을 지정하면 자산 통화로 환산해 initialCash에 반영한다", () => {
+    const state = baseState({
+      assets: [SAMSUNG],
+      investment: { ...defaultInvestmentSettings(), mode: "dca", dcaInitialCash: "1000" },
+    });
+    const request = buildPrepareReplaySessionRequest(state, "USD", RATE);
+
+    // 표시 통화 USD 1000 → KRW 1,400,000 (환율 1400)
+    expect(request.selections[0].simulationConfig.initialCash).toEqual({
+      amount: "1400000",
+      currency: "KRW",
+    });
+  });
+
   it("자산 2개는 동일한 투자 설정을 각자 고유 통화로 환산해 적용한다", () => {
     const state = baseState({ assets: [BTC, SAMSUNG] });
     const request = buildPrepareReplaySessionRequest(state, "USD", RATE);
@@ -125,9 +151,16 @@ describe("buildPrepareReplaySessionRequest — 오류", () => {
     );
   });
 
-  it("자산 3개를 거부한다", () => {
+  it("자산 3개는 허용한다", () => {
     const third = { ...BTC, id: "crypto-sol-usdt" };
     const state = baseState({ assets: [BTC, ETH, third] });
+    const request = buildPrepareReplaySessionRequest(state, "USD", null);
+    expect(request.selections).toHaveLength(3);
+  });
+
+  it("자산 4개를 거부한다", () => {
+    const third = { ...BTC, id: "crypto-sol-usdt" };
+    const state = baseState({ assets: [BTC, ETH, third, SAMSUNG] });
     expect(() => buildPrepareReplaySessionRequest(state, "USD", null)).toThrow(
       DomainValidationError,
     );
@@ -146,6 +179,15 @@ describe("buildPrepareReplaySessionRequest — 오류", () => {
   it("음수 원금을 거부한다 (도메인 검증 위임)", () => {
     const state = baseState({
       investment: { ...defaultInvestmentSettings(), initialCash: "-100" },
+    });
+    expect(() => buildPrepareReplaySessionRequest(state, "USD", null)).toThrow(
+      DomainValidationError,
+    );
+  });
+
+  it("정기매수 모드의 음수 초기 투자 비용을 거부한다 (도메인 검증 위임)", () => {
+    const state = baseState({
+      investment: { ...defaultInvestmentSettings(), mode: "dca", dcaInitialCash: "-1" },
     });
     expect(() => buildPrepareReplaySessionRequest(state, "USD", null)).toThrow(
       DomainValidationError,

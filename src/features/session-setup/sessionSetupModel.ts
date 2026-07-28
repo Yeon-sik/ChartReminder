@@ -25,7 +25,7 @@ import {
 import type { DisplayMode } from "../replay-workspace/viewModel";
 
 const DAY_MS = 86_400_000;
-const MAX_ASSETS = 2;
+const MAX_ASSETS = 3;
 const DEFAULT_LOOKBACK_DAYS = 180;
 
 export type InvestmentMode = "lump-sum" | "dca";
@@ -34,8 +34,9 @@ export type RecurringFrequency = "weekly" | "monthly";
 /**
  * 통합 투자 설정. (D-020 — 자산별로 따로 설정하지 않고 비교 대상 전체에 동일하게 적용한다)
  *
- * 금액(`initialCash`, `recurringAmount`)은 사용자가 고른 표시 통화(`DisplayCurrency`)
- * 기준으로 입력받는다 — `buildPrepareReplaySessionRequest`가 자산마다 고유 통화로 환산한다.
+ * 금액(`initialCash`, `recurringAmount`, `dcaInitialCash`)은 사용자가 고른 표시 통화
+ * (`DisplayCurrency`) 기준으로 입력받는다 — `buildPrepareReplaySessionRequest`가 자산마다
+ * 고유 통화로 환산한다.
  */
 export interface InvestmentSettingsFormState {
   readonly mode: InvestmentMode;
@@ -47,6 +48,8 @@ export interface InvestmentSettingsFormState {
   readonly recurringFrequency: RecurringFrequency;
   readonly recurringIsoDayOfWeek: number;
   readonly recurringDayOfMonth: number;
+  /** 정기매수 모드에서 첫날 한 번만 추가로 투입하는 초기 투자 비용(선택, 기본 0). */
+  readonly dcaInitialCash: string;
 }
 
 export interface SessionSetupFormState {
@@ -67,6 +70,7 @@ export function defaultInvestmentSettings(): InvestmentSettingsFormState {
     recurringFrequency: "weekly",
     recurringIsoDayOfWeek: 1,
     recurringDayOfMonth: 1,
+    dcaInitialCash: "0",
   };
 }
 
@@ -127,7 +131,7 @@ function buildSimulationConfig(
         }
       : {
           mode: "dca",
-          initialCash: { amount: "0", currency },
+          initialCash: { amount: toAssetCurrency(investment.dcaInitialCash), currency },
           recurring: {
             amount: { amount: toAssetCurrency(investment.recurringAmount), currency },
             frequency: investment.recurringFrequency,

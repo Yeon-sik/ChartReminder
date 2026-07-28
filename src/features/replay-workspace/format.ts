@@ -24,7 +24,7 @@ export function formatPercent(rate: DecimalString): string {
 }
 
 export function formatPriceStatus(status: "fresh" | "carried-forward"): string {
-  return status === "fresh" ? "실시간 종가" : "이월된 마지막 종가(carried-forward)";
+  return status === "fresh" ? "해당일 종가" : "직전 거래일 종가 이월";
 }
 
 /**

@@ -91,8 +91,19 @@ class FakeProvider implements MarketDataProvider {
   }
 }
 
-function buildComposition(): AppComposition {
-  const provider = new FakeProvider();
+class FailsOnceProvider extends FakeProvider {
+  private attempts = 0;
+
+  override getCandles(query: CandleQuery): Promise<ProviderCandleBatch> {
+    this.attempts += 1;
+    if (this.attempts === 1) {
+      return Promise.reject(new Error("temporary failure"));
+    }
+    return super.getCandles(query);
+  }
+}
+
+function buildComposition(provider: MarketDataProvider = new FakeProvider()): AppComposition {
   return {
     providers: new Map([[provider.id, provider]]),
     repository: new InMemoryCandleRepository(),
@@ -151,8 +162,11 @@ describe("ReplayWorkspace", () => {
     expect(screen.getByRole("status")).toHaveTextContent("조회하는 중");
 
     await screen.findByText("재생 준비 완료 · 2024-01-01");
+    expect(screen.getByText("무엇을 어떤 기준으로 재생 중인지")).toBeInTheDocument();
+    expect(screen.getByText("기간")).toBeInTheDocument();
 
-    expect(screen.getByText("Bitcoin (BTC/USDT)")).toBeInTheDocument();
+    expect(screen.getAllByText("Bitcoin (BTC/USDT)").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("데이터 상태: 해당일 종가")).toBeInTheDocument();
     // 1000 USDT로 종가 100에 매수 → 표시 통화 USD로 환산(1:1 가정, D-020) → 1000.00 USD 평가액
     expect(screen.getAllByText("1000.00 USD")).not.toHaveLength(0);
   });
@@ -180,5 +194,25 @@ describe("ReplayWorkspace", () => {
     // 종가 110 → 평가액 1100
     expect(screen.getAllByText("1100.00 USD")).not.toHaveLength(0);
     expect(screen.queryByText("1200.00 USD")).not.toBeInTheDocument();
+  });
+
+  it("준비 실패 후 다시 시도로 같은 설정을 재사용해 복구할 수 있다", async () => {
+    render(
+      <ReplayWorkspace
+        composition={buildComposition(new FailsOnceProvider())}
+        request={buildRequest()}
+        instrumentsById={{ [BTC.id]: BTC }}
+        displayMode="raw"
+        displayCurrency="USD"
+        usdKrwRate={null}
+        onBackToSetup={vi.fn()}
+      />,
+    );
+
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+
+    await screen.findByText("재생 준비 완료 · 2024-01-01");
+    expect(screen.getAllByText("1000.00 USD")).not.toHaveLength(0);
   });
 });

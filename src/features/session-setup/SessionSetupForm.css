@@ -37,6 +37,22 @@
   gap: var(--space-3);
 }
 
+/* 기간·표시 기준 — 이미 기본값이 채워진 보조 설정이라 핵심 결정 카드보다 가볍게 둔다 */
+.session-setup__quick-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+}
+
+.session-setup fieldset.session-setup__quick {
+  background: var(--color-surface-sunken);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.session-setup__quick legend {
+  font-size: 0.9rem;
+}
+
 .session-setup legend {
   padding: 0 var(--space-2);
   font-family: var(--font-display);
@@ -118,6 +134,21 @@ button.session-setup__remove {
   font-size: 0.78rem;
   padding: 0.15rem 0.55rem;
   margin-left: auto;
+}
+
+/* 보조 동작이라 제출 버튼과 경쟁하지 않도록 작고 점선 테두리로 가볍게 둔다 */
+button.session-setup__add {
+  align-self: flex-start;
+  border-style: dashed;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+}
+
+button.session-setup__add:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
 }
 
 button.session-setup__submit {

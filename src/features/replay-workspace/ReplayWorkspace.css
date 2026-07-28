@@ -41,10 +41,91 @@
 .replay-workspace__error {
   border-color: var(--color-loss);
   color: var(--color-loss);
+}
+
+.replay-workspace__summary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-6);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.replay-workspace__summary-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.replay-workspace__summary-eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.replay-workspace__asset-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.replay-workspace__asset-chip {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.replay-workspace__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+.replay-workspace__summary-grid div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.replay-workspace__summary-grid dt {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.replay-workspace__summary-grid dd {
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.replay-workspace__error-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 700;
+}
+
+.replay-workspace__error-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.replay-workspace__error-actions button {
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .replay-workspace__currency-note {
@@ -69,13 +150,19 @@
 
 .playback-controls {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
+}
+
+.playback-controls__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .playback-controls button {
@@ -140,6 +227,41 @@
   letter-spacing: 0.01em;
 }
 
+/* 재생 진행바(seek) — docs/06 §2·§5, 임의 시점으로 건너뛰기를 허용한다 */
+.playback-controls__seek-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.playback-controls__seek-date {
+  flex: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.playback-controls__progress {
+  flex: none;
+  min-width: 5.5rem;
+  margin: 0;
+  text-align: right;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.playback-controls__seek {
+  flex: 1;
+  accent-color: var(--color-accent-asset-2);
+}
+
+.playback-controls__seek:disabled {
+  opacity: 0.5;
+}
+
 /* ── 결과 요약 ──────────────────────────────────────────────────────── */
 
 .result-summary {
@@ -155,9 +277,32 @@
   padding: var(--space-4) var(--space-6);
 }
 
-.result-summary__asset h3 {
+.result-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   margin: 0 0 var(--space-1);
+}
+
+.result-summary__asset h3 {
+  margin: 0;
   font-size: 1.15rem;
+}
+
+.result-summary__status-badge {
+  flex: none;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.result-summary__status-badge.is-carried-forward {
+  border-color: var(--color-warning-text);
+  color: var(--color-warning-text);
 }
 
 .result-summary__date {
@@ -199,20 +344,40 @@
   color: var(--color-loss);
 }
 
-.result-summary__final {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px dashed var(--color-border);
+/* 손익·수익률 — 가장 먼저 확인하는 두 수치라 크게 강조한다 */
+.result-summary__headline {
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-1) var(--space-4);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.result-summary__final h4 {
-  margin: 0 0 var(--space-2);
-  font-family: var(--font-body);
-  font-size: 0.85rem;
+.result-summary__headline dt {
+  font-size: 0.8rem;
+}
+
+.result-summary__headline dd {
+  text-align: left;
+}
+
+.result-summary__headline-figure {
+  font-size: 1.5rem;
   font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+.result-summary__details {
+  row-gap: 0.4rem;
+}
+
+/* 현금/투자 자산은 평가금액(총자산)의 하위 항목이라 들여써서 구분한다 */
+dt.result-summary__sub-row,
+dd.result-summary__sub-row {
+  font-size: 0.82rem;
+}
+
+dt.result-summary__sub-row {
+  padding-left: var(--space-3);
 }
 
 .result-summary__assumptions {
@@ -234,4 +399,65 @@
   background: var(--color-surface);
   border-radius: var(--radius);
   padding: var(--space-3);
+}
+
+/* 시점 기준 현재가 — 가격변화 차트는 상대 추이만 그리므로 실제 가격은 여기서 텍스트로 보완한다. */
+.price-chart__current-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.price-chart__current-prices li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.price-chart__swatch {
+  width: 0.9rem;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.price-chart__swatch.is-dashed {
+  border-top-style: dashed;
+}
+
+.price-chart__swatch.is-dotted {
+  border-top-style: dotted;
+  border-top-width: 3px;
+}
+
+.price-chart__label {
+  font-family: var(--font-body);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 720px) {
+  .replay-workspace__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .replay-workspace__error {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .playback-controls__seek-row {
+    flex-wrap: wrap;
+  }
+
+  .playback-controls__progress {
+    min-width: 0;
+    text-align: left;
+  }
 }

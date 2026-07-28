@@ -91,10 +91,10 @@ export function useReplaySession(
   composition: AppComposition,
   request: PrepareReplaySessionRequest,
   initialSpeed?: ReplaySpeed,
+  reloadKey = 0,
 ): UseReplaySessionResult {
   const [store] = useState<EngineStore>(createEngineStore);
-
-  const prepareState = usePrepareReplaySession(composition, request);
+  const prepareState = usePrepareReplaySession(composition, request, reloadKey);
 
   useEffect(() => {
     if (prepareState.status !== "ready") {
@@ -132,14 +132,30 @@ export function useReplaySession(
   };
 }
 
-function createPrepareStateStore(): { value: PrepareState; listeners: Set<() => void> } {
-  return { value: { status: "loading" }, listeners: new Set() };
+function createPrepareStateStore() {
+  let snapshot: PrepareState = { status: "loading" };
+  const listeners = new Set<() => void>();
+
+  return {
+    getSnapshot: (): PrepareState => snapshot,
+    subscribe: (listener: () => void): (() => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setValue: (next: PrepareState): void => {
+      snapshot = next;
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+  };
 }
 
 /** prepareReplaySession 비동기 상태. 마운트 동안 request/composition이 고정이라고 신뢰한다. */
 function usePrepareReplaySession(
   composition: AppComposition,
   request: PrepareReplaySessionRequest,
+  reloadKey: number,
 ): PrepareState {
   const [stateStore] = useState(createPrepareStateStore);
 
@@ -150,12 +166,10 @@ function usePrepareReplaySession(
       if (cancelled) {
         return;
       }
-      stateStore.value = next;
-      for (const listener of stateStore.listeners) {
-        listener();
-      }
+      stateStore.setValue(next);
     }
 
+    setValue({ status: "loading" });
     prepareReplaySession(composition, request)
       .then((result) => setValue({ status: "ready", result }))
       .catch((error: unknown) =>
@@ -165,13 +179,7 @@ function usePrepareReplaySession(
     return () => {
       cancelled = true;
     };
-  }, [composition, request, stateStore]);
+  }, [composition, request, stateStore, reloadKey]);
 
-  return useSyncExternalStore(
-    (listener) => {
-      stateStore.listeners.add(listener);
-      return () => stateStore.listeners.delete(listener);
-    },
-    () => stateStore.value,
-  );
+  return useSyncExternalStore(stateStore.subscribe, stateStore.getSnapshot);
 }
