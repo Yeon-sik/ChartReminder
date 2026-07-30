@@ -236,6 +236,11 @@ export function InstrumentSearchModal({
               {error}
             </p>
           )}
+          {!loading && visibleResults.length > 0 && (
+            <p className="instrument-search-modal__status" aria-live="polite">
+              탐색 가능한 종목 {visibleResults.length.toLocaleString("ko-KR")}개
+            </p>
+          )}
           {!loading && visibleResults.length === 0 && (
             <p className="instrument-search-modal__status">검색 결과가 없습니다.</p>
           )}

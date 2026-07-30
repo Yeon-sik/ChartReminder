@@ -6,7 +6,9 @@
 
 ## 2. 암호화폐 수직 슬라이스
 
-초기 공급자는 공개 일봉 캔들을 제공하는 거래소 API를 사용한다. BTC, ETH, SOL의 기준 거래쌍과 quote currency는 UI에 명시한다.
+초기 공급자는 공개 일봉 캔들을 제공하는 거래소 API를 사용한다. 빠른 기본 추천은 BTC, ETH, SOL이며,
+전체 탐색 목록은 Binance 공개 `exchangeInfo`에서 활성 SPOT·USDT 거래쌍을 동적으로 읽는다.
+거래쌍과 quote currency는 UI에 명시한다.
 
 예: `BTC/USDT`는 “비트코인 전체 시장의 유일한 가격”이 아니라 해당 공급자의 BTC/USDT 시장 가격이다.
 

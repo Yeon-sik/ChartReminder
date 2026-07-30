@@ -73,6 +73,7 @@ describe("InstrumentSearchModal", () => {
     expect(
       await screen.findByRole("button", { name: /Bitcoin \(BTC\/USDT\)/ }),
     ).toBeInTheDocument();
+    expect(screen.getByText("탐색 가능한 종목 1개")).toBeInTheDocument();
   });
 
   it("시장 필터를 누르면 해당 provider 자산만 남긴다", async () => {

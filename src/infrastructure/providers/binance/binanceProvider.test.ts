@@ -88,6 +88,21 @@ const fixedClock: Clock = { nowUtcMs: () => Date.UTC(2024, 0, 10, 12) };
 
 const BTC = BINANCE_INSTRUMENTS[0];
 
+function exchangeSymbol(
+  symbol: string,
+  baseAsset: string,
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  return {
+    symbol,
+    status: "TRADING",
+    baseAsset,
+    quoteAsset: "USDT",
+    isSpotTradingAllowed: true,
+    ...overrides,
+  };
+}
+
 function makeProvider(responses: FakeResponse[], clock: Clock = fixedClock) {
   const httpClient = new FakeHttpClient(responses);
   const provider = new BinanceProvider({
@@ -359,16 +374,97 @@ describe("BinanceProvider 오류 분류와 재시도", () => {
 });
 
 describe("BinanceProvider.searchInstruments", () => {
-  it("빈 질의는 전체 카탈로그를 반환한다", async () => {
-    const { provider } = makeProvider([]);
-    await expect(provider.searchInstruments("")).resolves.toHaveLength(3);
+  it("공개 exchangeInfo에서 활성 USDT 현물 전체를 동적 카탈로그로 만든다", async () => {
+    const { provider, httpClient } = makeProvider([
+      {
+        kind: "ok",
+        body: {
+          symbols: [
+            exchangeSymbol("BTCUSDT", "BTC"),
+            exchangeSymbol("ETHUSDT", "ETH"),
+            exchangeSymbol("DOGEUSDT", "DOGE"),
+            exchangeSymbol("BTCUSDC", "BTC", { quoteAsset: "USDC" }),
+            exchangeSymbol("OLDUSDT", "OLD", { status: "BREAK" }),
+            exchangeSymbol("NOSPOTUSDT", "NOSPOT", { isSpotTradingAllowed: false }),
+          ],
+        },
+      },
+    ]);
+
+    const instruments = await provider.searchInstruments("");
+
+    expect(instruments.map((instrument) => instrument.providerSymbol)).toEqual([
+      "BTCUSDT",
+      "ETHUSDT",
+      "DOGEUSDT",
+    ]);
+    expect(instruments[0]).toMatchObject({
+      id: "crypto-btc-usdt",
+      symbol: "BTC/USDT",
+      displayName: "Bitcoin",
+      quoteCurrency: "USDT",
+      providerId: "binance",
+    });
+    expect(instruments[2]).toMatchObject({
+      id: "crypto-doge-usdt",
+      symbol: "DOGE/USDT",
+      displayName: "DOGE",
+    });
+    expect(httpClient.requestedUrls[0]).toContain("/api/v3/exchangeInfo?");
+    expect(httpClient.requestedUrls[0]).toContain("permissions=SPOT");
+    expect(httpClient.requestedUrls[0]).toContain("symbolStatus=TRADING");
   });
 
-  it("심볼·이름·공급자 심볼로 검색한다", async () => {
-    const { provider } = makeProvider([]);
+  it("동적 카탈로그를 심볼·이름·공급자 심볼로 검색하고 TTL 동안 재사용한다", async () => {
+    const { provider, httpClient } = makeProvider([
+      {
+        kind: "ok",
+        body: {
+          symbols: [
+            exchangeSymbol("BTCUSDT", "BTC"),
+            exchangeSymbol("ETHUSDT", "ETH"),
+            exchangeSymbol("SOLUSDT", "SOL"),
+            exchangeSymbol("DOGEUSDT", "DOGE"),
+          ],
+        },
+      },
+    ]);
+
     await expect(provider.searchInstruments("btc")).resolves.toHaveLength(1);
     await expect(provider.searchInstruments("Ethereum")).resolves.toHaveLength(1);
     await expect(provider.searchInstruments("SOLUSDT")).resolves.toHaveLength(1);
-    await expect(provider.searchInstruments("doge")).resolves.toHaveLength(0);
+    await expect(provider.searchInstruments("doge")).resolves.toHaveLength(1);
+    expect(httpClient.requestedUrls).toHaveLength(1);
+  });
+
+  it("동시에 시작한 검색은 exchangeInfo 요청 하나를 공유한다", async () => {
+    const { provider, httpClient } = makeProvider([
+      {
+        kind: "ok",
+        body: { symbols: [exchangeSymbol("BTCUSDT", "BTC"), exchangeSymbol("DOGEUSDT", "DOGE")] },
+      },
+    ]);
+
+    const [btc, doge] = await Promise.all([
+      provider.searchInstruments("btc"),
+      provider.searchInstruments("doge"),
+    ]);
+
+    expect(btc).toHaveLength(1);
+    expect(doge).toHaveLength(1);
+    expect(httpClient.requestedUrls).toHaveLength(1);
+  });
+
+  it("exchangeInfo 스키마가 잘못되면 부분 카탈로그로 위장하지 않는다", async () => {
+    const { provider } = makeProvider([
+      {
+        kind: "ok",
+        body: {
+          symbols: [exchangeSymbol("BTCUSDT", "BTC"), { symbol: "BROKENUSDT" }],
+        },
+      },
+    ]);
+
+    await expect(provider.searchInstruments("")).rejects.toThrow(ProviderResponseError);
   });
 });

@@ -16,12 +16,19 @@ import type { UtcTimeRange } from "../../../domain/market-data/timeRange";
 import { isDecimalString } from "../../../domain/shared/decimal";
 import { utcTradingDateFromUtcMs } from "../../../domain/shared/time";
 import type { HttpClient } from "../../http/httpClient";
-import { BINANCE_INSTRUMENTS, BINANCE_PROVIDER_ID } from "./binanceCatalog";
+import {
+  BINANCE_INSTRUMENTS,
+  BINANCE_PROVIDER_ID,
+  createBinanceInstrument,
+} from "./binanceCatalog";
 
 const DAY_MS = 86_400_000;
 /** 공개 시장 데이터 전용 엔드포인트. (docs/providers/BINANCE.md) */
 const DEFAULT_BASE_URL = "https://data-api.binance.vision";
 const MAX_KLINES_PER_REQUEST = 1000;
+const INSTRUMENT_CATALOG_TTL_MS = 15 * 60 * 1000;
+const EXCHANGE_INFO_QUERY =
+  "/api/v3/exchangeInfo?permissions=SPOT&symbolStatus=TRADING&showPermissionSets=false";
 
 export interface BinanceProviderOptions {
   readonly httpClient: HttpClient;
@@ -62,6 +69,9 @@ export class BinanceProvider implements MarketDataProvider {
   private readonly maxAttempts: number;
   private readonly baseDelayMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private instrumentCatalog: readonly Instrument[] | null = null;
+  private instrumentCatalogLoadedAtUtcMs = 0;
+  private instrumentCatalogRequest: Promise<readonly Instrument[]> | null = null;
 
   constructor(options: BinanceProviderOptions) {
     this.httpClient = options.httpClient;
@@ -72,18 +82,19 @@ export class BinanceProvider implements MarketDataProvider {
     this.sleep = options.sleep ?? defaultSleep;
   }
 
-  searchInstruments(query: string): Promise<Instrument[]> {
+  async searchInstruments(query: string): Promise<Instrument[]> {
+    const catalog = await this.getInstrumentCatalog();
     const needle = query.trim().toLowerCase();
     const matches =
       needle === ""
-        ? [...BINANCE_INSTRUMENTS]
-        : BINANCE_INSTRUMENTS.filter(
+        ? catalog
+        : catalog.filter(
             (instrument) =>
               instrument.symbol.toLowerCase().includes(needle) ||
               instrument.displayName.toLowerCase().includes(needle) ||
               instrument.providerSymbol.toLowerCase().includes(needle),
           );
-    return Promise.resolve(matches);
+    return [...matches];
   }
 
   async getCandles(query: CandleQuery): Promise<ProviderCandleBatch> {
@@ -157,6 +168,108 @@ export class BinanceProvider implements MarketDataProvider {
       }
     }
     return rows;
+  }
+
+  private getInstrumentCatalog(): Promise<readonly Instrument[]> {
+    const nowUtcMs = this.clock.nowUtcMs();
+    if (
+      this.instrumentCatalog !== null &&
+      nowUtcMs - this.instrumentCatalogLoadedAtUtcMs < INSTRUMENT_CATALOG_TTL_MS
+    ) {
+      return Promise.resolve(this.instrumentCatalog);
+    }
+    if (this.instrumentCatalogRequest !== null) {
+      return this.instrumentCatalogRequest;
+    }
+
+    const request = this.fetchInstrumentCatalog()
+      .then((catalog) => {
+        this.instrumentCatalog = catalog;
+        this.instrumentCatalogLoadedAtUtcMs = this.clock.nowUtcMs();
+        return catalog;
+      })
+      .finally(() => {
+        if (this.instrumentCatalogRequest === request) {
+          this.instrumentCatalogRequest = null;
+        }
+      });
+    this.instrumentCatalogRequest = request;
+    return request;
+  }
+
+  private async fetchInstrumentCatalog(): Promise<readonly Instrument[]> {
+    const payload = await this.requestJsonWithRetry(`${this.baseUrl}${EXCHANGE_INFO_QUERY}`);
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("symbols" in payload) ||
+      !Array.isArray(payload.symbols)
+    ) {
+      throw new ProviderResponseError(this.id, "exchangeInfo 응답에 symbols 배열이 없다.");
+    }
+
+    const instruments: Instrument[] = [];
+    const issues: string[] = [];
+    const seenProviderSymbols = new Set<string>();
+
+    payload.symbols.forEach((row: unknown, index: number) => {
+      if (typeof row !== "object" || row === null) {
+        issues.push(`symbols[${index}]가 객체가 아니다.`);
+        return;
+      }
+
+      const symbol = "symbol" in row ? row.symbol : undefined;
+      const status = "status" in row ? row.status : undefined;
+      const baseAsset = "baseAsset" in row ? row.baseAsset : undefined;
+      const quoteAsset = "quoteAsset" in row ? row.quoteAsset : undefined;
+      const isSpotTradingAllowed =
+        "isSpotTradingAllowed" in row ? row.isSpotTradingAllowed : undefined;
+
+      if (
+        typeof symbol !== "string" ||
+        symbol.length === 0 ||
+        typeof status !== "string" ||
+        typeof baseAsset !== "string" ||
+        baseAsset.length === 0 ||
+        typeof quoteAsset !== "string" ||
+        quoteAsset.length === 0
+      ) {
+        issues.push(`symbols[${index}]의 필수 문자열 필드가 유효하지 않다.`);
+        return;
+      }
+
+      // 표시/입력 환율 경계가 현재 USD·USDT·KRW만 지원하므로 USDT 현물만 노출한다.
+      if (status !== "TRADING" || quoteAsset !== "USDT" || isSpotTradingAllowed === false) {
+        return;
+      }
+      if (seenProviderSymbols.has(symbol)) {
+        return;
+      }
+      seenProviderSymbols.add(symbol);
+      instruments.push(createBinanceInstrument(baseAsset, quoteAsset, symbol));
+    });
+
+    if (issues.length > 0) {
+      throw new ProviderResponseError(this.id, "exchangeInfo 종목 스키마가 유효하지 않다.", issues);
+    }
+    if (instruments.length === 0) {
+      throw new ProviderResponseError(
+        this.id,
+        "exchangeInfo에서 활성 USDT 현물 종목을 찾지 못했다.",
+      );
+    }
+
+    const quickDefaultOrder = new Map(
+      BINANCE_INSTRUMENTS.map((instrument, index) => [instrument.providerSymbol, index]),
+    );
+    return instruments.sort((left, right) => {
+      const leftOrder = quickDefaultOrder.get(left.providerSymbol);
+      const rightOrder = quickDefaultOrder.get(right.providerSymbol);
+      if (leftOrder !== undefined || rightOrder !== undefined) {
+        return (leftOrder ?? Number.MAX_SAFE_INTEGER) - (rightOrder ?? Number.MAX_SAFE_INTEGER);
+      }
+      return left.symbol < right.symbol ? -1 : left.symbol > right.symbol ? 1 : 0;
+    });
   }
 
   private async requestJsonWithRetry(url: string): Promise<unknown> {
