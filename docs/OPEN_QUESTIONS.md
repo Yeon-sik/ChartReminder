@@ -16,8 +16,8 @@
 
 ## OQ-003 암호화폐 기준 거래쌍
 
-- 상태: RESOLVED (2026-07-14, D-010)
-- 결정: USDT 기준 (Binance BTCUSDT·ETHUSDT·SOLUSDT)
+- 상태: RESOLVED (2026-07-31, D-010에서 기준 거래쌍 결정, D-031에서 탐색 범위 확장)
+- 결정: Binance 활성 SPOT·USDT 거래쌍 전체. BTCUSDT·ETHUSDT·SOLUSDT는 빠른 기본 추천으로 유지
 - 근거: Binance 공개 API에 USD 현물 쌍이 없음. UI에 해당 공급자의 USDT 시장 가격임을 명시
 
 ## OQ-004 미국 주식 데이터 공급자

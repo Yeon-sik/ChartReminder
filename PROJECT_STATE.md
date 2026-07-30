@@ -4,12 +4,17 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 ## 현재 단계
 
-- 현재 마일스톤: M8 — 한국 주식 Provider
+- 현재 마일스톤: D-031 — Binance 암호화폐 전체 탐색 확장
 - 상태: DONE
-- 마지막 갱신: 2026-07-28
+- 마지막 갱신: 2026-07-31
 
 ## 완료된 마일스톤
 
+- D-031 — Binance 활성 USDT 현물 종목 전체 탐색 (2026-07-31, 정식 마일스톤 번호 없음, 사용자 요청 "암호화폐 차트 확장")
+  - **브랜치 기준**: `git fetch origin --prune` 후 기존 브랜치와 upstream, 로컬 `main`과 `origin/main`이 각각 `0 0` divergence로 동일함을 확인했다. 사용자 소유 `.claude/settings.local.json`은 보존하고 `main`에서 `feat/crypto-market-explorer`를 분화했다
+  - **동적 카탈로그**: Binance 공개 `exchangeInfo`에서 `TRADING`·SPOT·USDT 거래쌍을 불러오고, 15분 메모리 캐시와 동시 요청 공유를 적용했다. BTC/ETH/SOL은 기본 추천과 한글 표시명을 유지하지만 더 이상 검색 범위를 제한하지 않는다
+  - **실 서비스 확인**: 2026-07-31 `data-api.binance.vision` 응답에서 활성 SPOT 1,380개 중 USDT 현물 480개를 확인했다. 이 수치는 상장·거래 상태 변화에 따라 달라질 수 있다
+  - **검증**: `npm run verify` PASS(format/lint/typecheck/Vitest 516개 + live 2개 skip/cargo check), `npm run build` PASS, Binance live test 2개 PASS, 프로젝트 문서 validator 0 error/0 warning과 render-only PASS. 브라우저에서 BTC를 제외한 탐색 가능 종목 479개를 표시하고 `doge` 검색→DOGE 선택→실제 캔들 기반 가격변화 차트 준비까지 확인했으며 콘솔 warning/error는 없었다
 - D-030 — 올바른 GitHub 저장소 연결과 기능·문서 브랜치 분리 (2026-07-28, 정식 마일스톤 번호 없음, 사용자 요청 "문서 내용 커밋 후 푸시 메인 병합, docs/ 브랜치 분화")
   - **원격 교정**: 로컬 `origin`이 기능 이력과 무관한 `Yeon-sik/CashOS`를 가리키던 상태를 확인하고, 사용자가 지정한 `Yeon-sik/ChartReminder`로 교체했다. 비어 있던 원격 `main`에는 로컬 기준 commit `7c65f5b`를 먼저 올렸다
   - **기능 선행 병합**: 문서가 참조하는 사용자 기능 변경을 `feat/m9-new-age`의 `cb89596`으로 커밋·push하고 PR #1로 검토한 뒤, 원격 `main` merge commit `2df37d6`에 병합했다
@@ -204,20 +209,20 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 | 검증 | 상태 | 마지막 명령 | 비고 |
 |---|---|---|---|
-| Format | PASS | `npm run format:check` | 2026-07-27, 저장소 고정 project-docs runtime은 upstream byte 보존을 위해 Prettier 대상에서 제외 |
-| Lint | PASS | `npm run lint` | 2026-07-27, ESLint 10 flat config. 저장소 고정 Node runtime은 독립 test를 통과한 vendored 경계로 제외 |
-| Typecheck | PASS | `npm run typecheck` | 2026-07-27, tsc strict |
-| Unit test | PASS | `npm run test` | 2026-07-27, Vitest 4 + jsdom, 514개 통과 + live 1개 skip |
-| Integration test | PASS | `npm run test` | Provider 계약(Binance+Tiingo+공공데이터포털, 검색 포함) + FX Provider 계약(Frankfurter) + SQLite(better-sqlite3, app_settings 포함) + use case(다중 provider 검색 포함, 자산 3개 상한 포함) + React 컴포넌트 통합 + 세션 저장소 포함 |
-| Live API smoke | PASS (opt-in, Binance만 자동화) | `$env:LIVE_API="1"; npm run test` | 기본 실행에서 제외, Binance 대상 2026-07-14 수동 1회 PASS 이후 재실행 안 함. 공공데이터포털 가격 조회는 사용자의 실 키로 `curl` 직접 호출 검증 완료(2026-07-19, D-019), 종목 검색은 활용신청 안 돼 있어 403만 확인(2026-07-21, D-021). Frankfurter는 curl과 Playwright 브라우저 양쪽에서 실 호출 확인(2026-07-21, D-020). Tiingo 가격 조회는 미검증(실 키 없음), Tiingo 검색은 curl로 확인(2026-07-21, D-021) |
-| Cargo check | PASS | `npm run check:rust` | 2026-07-27. 마지막 의존성 변경은 2026-07-21 `dotenvy` 추가(D-018, `.env` 자동 적용) |
+| Format | PASS | `npm run format:check` | 2026-07-31, 저장소 고정 project-docs runtime은 upstream byte 보존을 위해 Prettier 대상에서 제외 |
+| Lint | PASS | `npm run lint` | 2026-07-31, ESLint 10 flat config. 저장소 고정 Node runtime은 독립 test를 통과한 vendored 경계로 제외 |
+| Typecheck | PASS | `npm run typecheck` | 2026-07-31, tsc strict |
+| Unit test | PASS | `npm run test` | 2026-07-31, Vitest 4 + jsdom, 516개 통과 + live 2개 skip |
+| Integration test | PASS | `npm run test` | 2026-07-31, Provider 계약(Binance 동적 카탈로그+Tiingo+공공데이터포털, 검색 포함) + FX Provider 계약(Frankfurter) + SQLite(better-sqlite3, app_settings 포함) + use case(다중 provider 검색 포함, 자산 3개 상한 포함) + React 컴포넌트 통합 + 세션 저장소 포함 |
+| Live API smoke | PASS (opt-in, Binance만 자동화) | `$env:LIVE_API="1"; npm run test` | 2026-07-31 Binance 2개 PASS: `exchangeInfo` 활성 USDT 현물 카탈로그와 BTC 일봉 캔들. 공공데이터포털 가격 조회는 사용자의 실 키로 `curl` 직접 호출 검증 완료(2026-07-19, D-019), 종목 검색은 활용신청 안 돼 있어 403만 확인(2026-07-21, D-021). Frankfurter는 curl과 Playwright 브라우저 양쪽에서 실 호출 확인(2026-07-21, D-020). Tiingo 가격 조회는 미검증(실 키 없음), Tiingo 검색은 curl로 확인(2026-07-21, D-021) |
+| Cargo check | PASS | `npm run check:rust` | 2026-07-31. 마지막 의존성 변경은 2026-07-21 `dotenvy` 추가(D-018, `.env` 자동 적용) |
 | npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함. M8·D-020·D-021은 신규 npm 의존성 없음(Rust `dotenvy`만 추가, D-018) |
-| Production build | PASS | `npm run build` | 2026-07-27, tsc + Vite build |
-| Project docs | PASS (local) | `npm run docs:validate`, `npm run docs:render` | 2026-07-27, validator 0 error/0 warning, render-only dry run PASS, 임시 index `--require-tracked` PASS. Notion publish는 secret·page 미설정으로 미실행 |
+| Production build | PASS | `npm run build` | 2026-07-31, tsc + Vite build |
+| Project docs | PASS (local) | `npm run docs:validate`, `npm run docs:render` | 2026-07-31, validator 0 error/0 warning, render-only dry run PASS. Notion publish는 미실행 |
 | Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 M8의 `dotenvy`를 포함한 재빌드는 아직 안 함 — `cargo check`+`npm run tauri dev`(기동 확인)만 확인 |
 | 설치 테스트 | 부분 PASS (M6 시점) | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19(M6), 이 머신에서 1회 확인. MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증. M7 이후 재검증 안 함 |
 | `npm run tauri dev` 기동 확인 | PASS | `npm run tauri dev` | 2026-07-21: Rust 빌드 성공, 패닉 없이 네이티브 창 기동 확인(D-018 도입 후). UI 내부 상호작용(BYOK 자동 적용 문구 렌더링 등)은 네이티브 창이라 자동 캡처 도구가 없어 사용자 육안 확인에 의존. D-020(창 높이 1280 등)·D-021 반영 후 재기동은 아직 안 함 |
-| 브라우저 실사용 검증 | PASS | Playwright MCP, `npm run dev` | 2026-07-21: 통합 투자 설정 → 설정 탭 표시 통화 전환(KRW→USD, 라벨 즉시 반영) → 2자산 세션 제출 → 결과 요약 통화 환산·환산 가정 문구 정상 표시(D-020); 검색창 포커스 시 기본 추천 → 실시간 필터링("sol") → 선택 반영까지 확인(D-021). Frankfurter 실 환율 조회 성공, 콘솔 오류 없음(파비콘 404 제외). M7 Tiingo·M8 공공데이터포털 데이터 조회는 Tauri 데스크톱 런타임이 필요해 브라우저 프리뷰로 검증 불가. 2026-07-24: 돋보기 버튼 → 검색 모달 → 자산 선택 → 정기매수 초기 투자 비용 입력(100000) → 제출 → 결과 요약에 기여 원금 즉시 반영, 시장 필터 칩·Esc 닫기 동작 확인, 콘솔 오류 없음(파비콘 404 제외)(D-025). 2026-07-25: BTC+ETH+SOL 3자산 세션 → 표시 기준 선택지 2개(원시 가격 없음) → 3개에서 자산 추가 버튼 사라짐 → 재생 진행 → 가격변화 차트 3선(스타일 구분)+자산별 현재가 텍스트, 투자금 변화 차트 기여 원금 1선+평가액 3선, 축·라벨 통화 단위(KRW) 표시 확인, 콘솔 오류 없음(파비콘 404 제외)(D-026) |
+| 브라우저 실사용 검증 | PASS | in-app Browser, `npm run dev` | 2026-07-31: 실제 Binance 카탈로그에서 BTC를 제외한 탐색 가능 종목 479개 표시 → `doge` 검색 → DOGE 선택 → 세션 준비 → 실제 캔들 기반 가격변화·투자금 변화 차트 렌더링 확인, 콘솔 warning/error 없음(D-031). 이전 D-020/D-021/D-025/D-026 브라우저 시나리오도 각각 통과 기록 유지 |
 
 `npm run verify`가 format:check + lint + typecheck + test + cargo check를 일괄 실행한다.
 
@@ -225,14 +230,14 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 - 제품 형태: Windows 데스크톱 앱
 - 초기 스택: Tauri 2 + React + TypeScript
-- 초기 데이터: BTC, ETH, SOL 일봉
+- 초기 기본 추천: BTC, ETH, SOL 일봉. 탐색 범위는 Binance의 활성 USDT 현물 전체(D-031)
 - 핵심 계산: AI 미사용, 결정론적 계산
 - 저장: 로컬 우선
 - 패키지 매니저: npm (D-006)
 - 제품 표시명: Chart Reminder (D-016, OQ-001 RESOLVED — D-014의 "CashOS" 결정을 대체). Tauri identifier `com.investmentreplay.dev`·npm/Cargo 패키지명·SQLite 캐시 파일명은 설치 경로 단절을 피하기 위해 그대로 유지. M7에서 도입된 keyring 저장 키 접두사가 표시명(`cashos.*`)에 결합돼 있던 버그를 함께 수정(`investment-replay.*`로 안정화)
 - 품질 도구: Prettier + ESLint + Vitest + cargo check, CI는 GitHub 원격 생성 후 (D-008)
 - Decimal 라이브러리: decimal.js 10.6.0, `src/domain/shared/decimal.ts`로 캡슐화 (D-009)
-- 암호화폐 공급자: Binance 공개 klines API, USDT 거래쌍, base URL `data-api.binance.vision` (D-010, OQ-003 RESOLVED)
+- 암호화폐 공급자: Binance 공개 `exchangeInfo` + `klines` API, 활성 SPOT USDT 거래쌍, base URL `data-api.binance.vision` (D-010, D-031, OQ-003 RESOLVED). 종목 카탈로그는 15분 메모리 캐시하며 BTC/ETH/SOL은 기본 추천으로 유지
 - SQLite: 연결은 tauri-plugin-sql, 스키마 마이그레이션은 TS 러너, 테스트는 better-sqlite3 (D-011)
 - MDD 정의와 비율 반올림: 가격 기준 MDD를 기본 제공하고 총자산 기준 MDD를 별도 표기, 비율은 소수 10자리 ROUND_HALF_UP (D-012, OQ-007 RESOLVED)
 - 차트 라이브러리: TradingView Lightweight Charts v5 (D-013). CORS 확인 완료(`data-api.binance.vision`이 `Access-Control-Allow-Origin: *` 응답), 공식 React 튜토리얼 패턴(`createChart` + `addSeries(LineSeries)` + `setData`) 채택
@@ -242,7 +247,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - 한국 주식 Provider: 공공데이터포털(data.go.kr) "금융위원회_주식시세정보", BYOK 모델 (D-017, OQ-005 RESOLVED). Tiingo와 동일한 `tauriHttpClient`·keyring 저장 경로 재사용. 이 API는 수정주가를 제공하지 않음(원시 시세만). `endBasDt`는 배타적(exclusive) 경계다 — 흔한 문서 서술과 다름, 실측으로 확인(D-019)
 - BYOK 키 `.env` 자동 적용(개발 편의) (D-018): 저장소 루트 `.env`의 `TIINGO_API_KEY`/`OPEN_API_KEY`/`OPEN_API_ENDPOINT`가 있으면 Rust 런타임에서만 읽어 자동 적용하고, 없으면 기존 수동 입력(keyring 저장)으로 폴백. 프런트엔드 빌드에는 절대 포함되지 않아 배포 바이너리에 개인 키가 섞이지 않음
 - 통합 투자 설정 + 표시 통화·환율 변환 (D-020, OQ-006 RESOLVED): 비교 자산 전체에 동일한 투자 규칙(모드·금액·주기·수수료) 하나만 적용(자산별 설정 기능 제거). 표시 통화(KRW/USD)는 설정 탭에서 선택, 값은 표시/입력 경계에서만 환산(엔진·캐시는 항상 자산 고유 통화). FX Provider는 Frankfurter(무료·키 불필요·CORS 열림), USD/USDT는 1:1 가정
-- 종목 검색 (D-021, D-022): Tiingo·공공데이터포털은 큐레이션 5종 대신 각 Provider의 실제 검색 API를 쓴다(빈 질의만 큐레이션 기본값). 여러 Provider를 한 검색창에서 동시에 조회(`Promise.allSettled`로 부분 실패 허용). Tiingo는 쿼리당 최대 10건(Tiingo 서버 자체 제한, 회사명 없는 벌크 목록과의 트레이드오프로 현행 유지 선택), 공공데이터포털은 최대 50건(이 앱이 걸었던 제한을 상향, 사실상 전체 종목 커버). 암호화폐(Binance)는 BTC/ETH/SOL 고정 그대로 유지(GOAL.md 범위, 사용자 명시)
+- 종목 검색 (D-021, D-022, D-031): Tiingo·공공데이터포털은 큐레이션 5종 대신 각 Provider의 실제 검색 API를 쓴다(빈 질의만 큐레이션 기본값). 여러 Provider를 한 검색창에서 동시에 조회(`Promise.allSettled`로 부분 실패 허용). Tiingo는 쿼리당 최대 10건(Tiingo 서버 자체 제한, 회사명 없는 벌크 목록과의 트레이드오프로 현행 유지 선택), 공공데이터포털은 최대 50건(이 앱이 걸었던 제한을 상향, 사실상 전체 종목 커버). 암호화폐는 Binance `exchangeInfo`의 활성 USDT 현물을 동적으로 검색하며 기본 추천만 BTC/ETH/SOL로 유지
 - 정기매수 초기 투자 비용, 자산 검색 모달 (D-025, 사용자 확인): 정기매수 초기 투자 비용은 일시투자 "원금"과 별개 필드(`dcaInitialCash`, 기본 0) — 모드 전환 시 값이 섞이지 않음. 자산 검색은 인라인 드롭다운 대신 돋보기 버튼 → `InstrumentSearchModal`(신규, `createPortal`로 `document.body`에 렌더링), 시장 필터 칩(전체/암호화폐/미국 주식/한국 주식)은 GOAL.md가 고정한 3개 시장의 providerId(`binance`/`tiingo`/`krx-public-data`)로 직접 매핑(결과에 나타난 시장으로 동적 생성하지 않음)
 - 차트 표현 개편, 자산 비교 상한 2→3개 (D-026, 사용자 요청): 가격 차트는 항상 상대적 변화 추이(시작점 100/누적 수익률)만 그린다 — `DisplayMode`의 `raw`(원시 가격)는 타입·엔진 로직은 유지하되 새 세션의 선택지에서만 제거(기존 raw 세션은 계속 재생됨). 실제 가격 감각은 자산별 "시점 기준 현재가" 텍스트로 별도 제공. 투자금 변화 차트는 기여 원금을 하나로 통합(통합 투자 설정상 자산 간 동일 전제)하고 자산별 평가액만 각각 표시, 통화 단위를 축·라벨에 표기
 
@@ -258,6 +263,7 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 - D-021 남은 위험: (1) **공공데이터포털 종목 검색("금융위원회_KRX상장종목정보")은 이 세션의 키가 활용신청되어 있지 않아 403만 확인했다 — 사용자가 data.go.kr에서 별도 활용신청 후 실제 검색이 되는지, 그리고 `srtnCd`에 "A" 접두사가 실제로 붙는지 확인 필요**(코드는 두 형태 모두 방어적으로 처리해 뒀지만 실측은 아님). (2) Tiingo 검색은 curl로는 확인했지만 앱 UI를 통한 종단 확인은 Tauri 필요. (3) Tiingo Search API가 공식 문서상 "early beta"라 응답 스키마가 바뀔 수 있음
 - D-025 남은 위험: 검색 모달의 시장 필터(미국 주식·한국 주식 칩)는 브라우저 프리뷰에 크립토만 등록돼 있어 실제 Provider 결과로 좁혀지는 것은 Tauri 데스크톱(Tiingo·공공데이터포털 키 필요)에서 미확인 — 필터링 로직 자체는 목데이터로 테스트 확인됨. 모달 focus trap·포커스 복원은 D-027에서 해소
 - D-026 남은 위험: (1) "기여 원금은 자산 간 동일" 전제는 통합 투자 설정(D-020, 모든 자산에 같은 규칙 적용)에서만 성립 — 이후 자산별 다른 투자 규칙 기능이 추가되면 재검토 필요. (2) 기존에 `raw` displayMode로 저장된 세션을 불러와 재생하는 경로는 로직상 안전할 것으로 판단했으나 실제 raw 세션이 없어 회귀 검증은 못함. (3) 미국·한국 주식을 섞은 3자산(서로 다른 통화 3개) 비교는 브라우저 프리뷰에 크립토만 등록돼 있어 미확인 — Tauri 데스크톱에서 BYOK 키로 사용자 확인 필요
+- D-031 남은 위험: (1) 상장 종목 수와 거래 상태는 Binance 응답에 따라 변한다. (2) 기본 3종 외 종목명은 별도 메타데이터 없이 base asset 코드로 표시한다. (3) 480개 수준은 현재 단순 목록 렌더링으로 실사용 가능하지만, 종목 수가 크게 늘거나 저사양 환경에서 지연이 확인되면 목록 가상화를 추가한다
 
 ## 다음 작업
 

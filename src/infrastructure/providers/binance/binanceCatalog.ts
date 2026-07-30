@@ -3,10 +3,10 @@ import type { Instrument } from "../../../domain/instrument/instrument";
 export const BINANCE_PROVIDER_ID = "binance";
 
 /**
- * MVP-A 지원 자산 카탈로그. (D-002, D-010)
+ * 앱 시작과 "비교 자산 추가"에 사용하는 빠른 기본 추천. (D-002, D-010)
  *
- * 가격은 Binance 현물 USDT 시장 기준이다. UI는 거래쌍과 출처를 함께 표시해야 한다.
- * `id`는 공급자 교체에도 유지되는 내부 식별자다. (docs/02 §1)
+ * 전체 지원 목록은 Binance `exchangeInfo`에서 동적으로 읽는다. 이 배열은 오프라인 기본값과
+ * 기존 저장 세션의 안정적인 이름을 유지하기 위한 것이며 전체 카탈로그가 아니다.
  */
 export const BINANCE_INSTRUMENTS: readonly Instrument[] = [
   {
@@ -46,3 +46,31 @@ export const BINANCE_INSTRUMENTS: readonly Instrument[] = [
     status: "active",
   },
 ];
+
+const PREFERRED_DISPLAY_NAMES = new Map(
+  BINANCE_INSTRUMENTS.map((instrument) => [instrument.providerSymbol, instrument.displayName]),
+);
+
+/**
+ * Binance 거래쌍을 공통 Instrument로 변환한다.
+ *
+ * 기존 BTC·ETH·SOL ID를 그대로 보존하면서 동적 거래쌍에도 같은 규칙을 적용한다.
+ */
+export function createBinanceInstrument(
+  baseAsset: string,
+  quoteAsset: string,
+  providerSymbol: string,
+): Instrument {
+  return {
+    id: `crypto-${baseAsset.toLowerCase()}-${quoteAsset.toLowerCase()}`,
+    symbol: `${baseAsset}/${quoteAsset}`,
+    displayName: PREFERRED_DISPLAY_NAMES.get(providerSymbol) ?? baseAsset,
+    assetClass: "crypto",
+    market: "BINANCE",
+    quoteCurrency: quoteAsset,
+    exchangeTimezone: "UTC",
+    providerId: BINANCE_PROVIDER_ID,
+    providerSymbol,
+    status: "active",
+  };
+}

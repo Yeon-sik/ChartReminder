@@ -278,6 +278,27 @@
 - 결과: `src/infrastructure/providers/krxPublicData/krxPublicDataProvider.ts`(`MAX_SEARCH_RESULTS` 20→50 + 근거 주석), `src/infrastructure/providers/tiingo/tiingoProvider.ts`(현행 유지 근거를 주석으로 명시)
 - 재검토 조건: Tiingo가 향후 검색 결과 상한을 공식 문서화하거나 늘리면 재검토. 공공데이터포털도 활용신청 후 실제 검색 결과 건수를 확인하면(D-021 미검증 항목) 50이 충분한지 재확인 필요
 
+## D-031: Binance 활성 USDT 현물 전체 탐색
+
+- 상태: Accepted
+- 맥락: 사용자가 기존 BTC·ETH·SOL 3종만 보이는 암호화폐 차트를 무료 API 범위에서 전체 탐색 가능하게 확장해 달라고 요청했다. 기존 병목은 차트 엔진이나 자산 비교 상한이 아니라 `BinanceProvider.searchInstruments`가 정적 배열 3개만 필터링하던 구현이었다.
+- 조사 결과(공식 문서 + 실 API, 2026-07-31):
+  - Binance 시장 데이터 전용 `data-api.binance.vision`의 `GET /api/v3/exchangeInfo`는 인증과 API 키가 필요 없는 공개 API이며 요청 weight는 20이다.
+  - `permissions=SPOT&symbolStatus=TRADING&showPermissionSets=false`로 조회한 실 응답은 활성 SPOT 1,380개, 그중 USDT 거래쌍 480개였다. 이 수는 상장 상태에 따라 변한다.
+  - 앱의 표시·입력 환율 경계는 KRW·USD·USDT만 지원하므로 다른 quote asset 거래쌍까지 노출하면 종목 선택은 되지만 세션 준비에서 환율 변환이 실패한다.
+- 선택:
+  - 전체 탐색의 정확한 범위를 **활성 SPOT·USDT 거래쌍 전체**로 정한다. 이는 실측 시 480개였으며 API 결과에 따라 동적으로 변한다.
+  - `BinanceProvider`가 첫 검색에서 `exchangeInfo`를 읽어 공통 `Instrument`로 변환하고 15분 동안 메모리 캐시한다. 동시 검색은 하나의 진행 중 요청을 공유한다.
+  - 빈 질의는 전체 목록을 반환하고, 입력 질의는 base symbol·표시명·provider symbol을 로컬 필터링한다. BTC·ETH·SOL은 빠른 기본 추천과 기존 저장 세션 호환을 위해 정적 기본값·표시명·ID를 유지한다.
+  - 응답 스키마가 깨지면 일부 결과를 전체 성공으로 위장하지 않고 `ProviderResponseError`로 노출한다. 기존 `Promise.allSettled` 통합 검색 경계 덕분에 Binance 실패가 다른 Provider 결과까지 막지는 않는다.
+- 대안:
+  - 모든 quote asset 거래쌍 노출 — 현재 환율·통화 변환 지원 범위를 넘어 기각.
+  - CoinGecko 등 별도 API 추가 — Binance 일봉 데이터와 종목 정체성이 갈리고 별도 호출 제한·라이선스 경계가 생기므로 현재 요구에 불필요.
+  - 거래쌍 목록을 정적으로 주기 배포 — 상장 변경 때마다 앱 업데이트가 필요해 기각.
+- 이유: 기존 Binance 공개 API 하나로 검색과 일봉 조회의 공급자 정체성을 일치시키면서 API 키·신규 의존성·서버를 추가하지 않고 현재 계산 파이프라인이 실제로 끝까지 처리할 수 있는 최대 범위를 제공한다.
+- 결과: `src/infrastructure/providers/binance/binanceCatalog.ts`, `binanceProvider.ts`와 계약·live smoke 테스트, 검색 모달 결과 수 표시, `GOAL.md`·Provider 명세·현재 상태 문서 갱신.
+- 재검토 조건: KRW·USD·USDT 외 quote currency 환율 변환을 지원할 때 탐색 범위를 넓힌다. Binance가 `exchangeInfo` 응답 필드·가중치·시장 데이터 전용 URL을 바꾸면 parser와 캐시 정책을 재확인한다.
+
 ## 새 결정 템플릿
 
 ```text

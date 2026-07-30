@@ -12,6 +12,15 @@ import { BinanceProvider } from "./binanceProvider";
  * CI 필수 검증에 포함하지 않는다 (불안정한 네트워크 의존 금지, docs/08).
  */
 describe.runIf(process.env.LIVE_API === "1")("BinanceProvider 실제 API 스모크", () => {
+  it("공개 exchangeInfo에서 BTC 외 활성 USDT 현물 종목을 탐색한다", async () => {
+    const provider = new BinanceProvider({ httpClient: fetchHttpClient });
+    const instruments = await provider.searchInstruments("");
+
+    expect(instruments.length).toBeGreaterThan(3);
+    expect(instruments.some((instrument) => instrument.providerSymbol === "BTCUSDT")).toBe(true);
+    expect(instruments.every((instrument) => instrument.quoteCurrency === "USDT")).toBe(true);
+  }, 30_000);
+
   it("BTC/USDT 최근 닫힌 일봉 5개를 조회·정규화한다", async () => {
     const provider = new BinanceProvider({ httpClient: fetchHttpClient });
     const DAY_MS = 86_400_000;
