@@ -4,37 +4,39 @@
 
 ## 준비 상태
 
-- 스킬 소스: `Yeon-sik/notion-project-docs`의 최신 `main` 기준 `maintain-project-docs` (2026-07-28 재적용)
+- 스킬 소스: `Yeon-sik/notion-project-docs`의 `a2371f0` 기준 `maintain-project-docs` (2026-08-08 재확인)
 - Canonical branch: `main`
 - Publication mode: `manual`
 - GitHub Environment: `notion-production`
+- 원격 구성: `main` deployment policy, required reviewer, `NOTION_TOKEN`·`NOTION_PAGE_IDS_JSON` secret 이름 확인. 값은 조회하거나 Git에 기록하지 않는다.
+- 마지막 확인된 실제 게시: [Actions run 30327719825](https://github.com/Yeon-sik/ChartReminder/actions/runs/30327719825), source `95eeb4459239951327950a053c4a643897df9fb4`
 - 문서 원본:
   - `intro` → `docs/Project_Intro.md`
   - `detail` → `docs/Project_Detail.md`
 
 ## 저장소와 게시 경계
 
-현재 문서가 근거로 삼는 사용자 기능은 feature PR #1을 통해 `main` merge commit `2df37d6`에 먼저 병합됐다. 프로젝트 문서·`project-docs.config.json`·`.github/project-docs`·workflow는 `docs/chart-reminder-project-docs` 브랜치에서 별도로 검토한다. 문서가 `main`에 병합되기 전에는 GitHub Actions workflow를 실행할 수 없다.
+현재 앱 구현 기준은 Binance 활성 USDT 현물 전체 탐색을 포함한 `main` merge commit `078de188388fe9fdd8c75f4a2ad012fe8ea05ee8`이다. 프로젝트 문서·`project-docs.config.json`·`.github/project-docs`·workflow는 이미 `main`에 추적돼 있으며, 이후 게시도 canonical `main`의 검토된 revision만 사용한다.
 
-현재 게시 대상 저장소는 `Yeon-sik/ChartReminder`다. 이전에 원격이 `Yeon-sik/CashOS`를 가리키던 상태에서 설정 도구를 실행했다면 GitHub Environment와 secret은 CashOS에 구성됐을 수 있으므로, 문서 병합 후 ChartReminder 저장소를 기준으로 설정 도구를 다시 실행해야 한다. 기존 Notion 전용 페이지가 비어 있고 구조 조건을 만족한다면 그 페이지를 다시 연결할 수 있다.
+현재 게시 대상 저장소는 `Yeon-sik/ChartReminder`다. `notion-production` Environment와 필수 secret 이름, 2026-07-28 실제 게시 성공을 확인했다. 다른 저장소의 page map이나 미러 페이지를 재사용하지 않으며, 페이지 제목·source repository·source commit이 ChartReminder와 일치하지 않으면 게시를 중단한다.
 
 ## 권장 초기 설정
 
-설치된 스킬 디렉터리에서 다음 설정 도구를 실행하면 Notion 전용 child page 생성과 GitHub Environment·secret 설정을 한 흐름으로 처리할 수 있다.
+새로 연결하거나 page map을 교체할 때만 설치된 스킬 디렉터리에서 다음 설정 도구를 실행한다. `--target`은 스킬 디렉터리가 아니라 자동화가 설치된 ChartReminder 저장소 루트를 명시해야 한다.
 
 ```powershell
-node <skill-directory>/scripts/setup-project-docs.mjs
+node <skill-directory>/scripts/setup-project-docs.mjs --target C:\Github\ChartReminder
 ```
 
 도구는 Notion token과 page ID를 Git에 기록하지 않는다. GitHub CLI 인증과 저장소 관리자 권한이 필요하며, 실제 외부 설정 변경 전에는 표시되는 대상을 확인해야 한다.
 
-이 명령은 미러 목적지와 GitHub 설정을 준비할 뿐 `docs/Project_Intro.md`와 `docs/Project_Detail.md` 본문을 게시하지 않는다. 따라서 생성 직후 페이지가 비어 있는 것은 정상이다. 실제 본문은 문서 runtime이 `main`에 병합된 뒤 `Validate and publish project docs` workflow를 `operation=publish`, `confirmation=PUBLISH`로 실행할 때 채워진다.
+기본 선택된 **initial content publication** 옵션은 clean·tracked canonical source와 원격 tip이 일치할 때 미러 목적지·GitHub 설정을 준비한 뒤 `docs/Project_Intro.md`와 `docs/Project_Detail.md` 본문도 한 번 게시한다. 연결만 구성하려면 이 옵션을 해제한다. 최초 연결 이후의 모든 본문 갱신은 `Validate and publish project docs` workflow를 `operation=publish`, `confirmation=PUBLISH`로 실행한다.
 
 `manual` 모드에서는 required reviewer를 우선 설정한다. 비공개 저장소의 GitHub 플랜 제한 때문에 GitHub가 해당 reviewer 설정에 특정 HTTP 422를 반환하면, 도구는 경고와 사용자 확인 후 reviewer 없이 Environment 설정을 계속한다. 이 경우에도 canonical branch 제한과 정확한 `PUBLISH` 확인은 유지되지만, 별도의 Environment 승인 단계는 제공되지 않으므로 보호 수준이 낮다.
 
-## 수동으로 한 번만 설정할 값
+## 수동 설정 또는 복구 시 필요한 값
 
-GitHub 저장소의 `Settings → Environments → notion-production`에서 다음 Environment secret을 추가한다.
+현재 ChartReminder Environment에는 두 secret 이름이 모두 존재한다. 토큰 회전, page map 교체, 새 저장소 설정 때만 `Settings → Environments → notion-production`에서 값을 다시 구성한다.
 
 | Secret | 값 |
 | --- | --- |
@@ -80,9 +82,9 @@ Git에 추가된 revision에서는 다음 tracked-file 검증도 통과해야 �
 node .github/project-docs/validate-project-docs.mjs --config project-docs.config.json --require-tracked
 ```
 
-## 첫 게시
+## 수동 게시
 
-1. 프로젝트 문서, config, workflow, `.github/project-docs` 런타임을 함께 review하고 `main`에 병합한다.
+1. 프로젝트 문서, config, workflow, `.github/project-docs` 런타임을 함께 검토하고 `main`에 반영한다.
 2. GitHub Actions에서 `Validate and publish project docs` workflow를 연다.
 3. `operation=validate`를 실행해 문서·링크·render dry run을 확인한다.
 4. `operation=publish`, `confirmation=PUBLISH`로 다시 실행한다.

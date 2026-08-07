@@ -4,9 +4,9 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 상태 | Draft |
-| 적용 범위 | `main` merge commit `2df37d6` (feature PR #1) |
-| 최종 갱신 | 2026-07-28T12:30:00+09:00 |
+| 문서 상태 | Active |
+| 적용 범위 | `main` merge commit [`078de18`](https://github.com/Yeon-sik/ChartReminder/commit/078de188388fe9fdd8c75f4a2ad012fe8ea05ee8) (feature PR #3) |
+| 최종 갱신 | 2026-08-08T02:40:10+09:00 |
 | 문서 진실 원천 | Git 저장소의 `docs/Project_Detail.md` |
 | 제품 형태 | Tauri 기반 Windows 데스크톱 앱 |
 | 공개 저장소 | [Yeon-sik/ChartReminder](https://github.com/Yeon-sik/ChartReminder) |
@@ -82,7 +82,7 @@
 
 | 기능 | 구현 상태 | 검증 수준 | 근거 | 남은 위험 |
 | --- | --- | --- | --- | --- |
-| 암호화폐 종목 탐색·일봉 조회 | 구현 완료 | 계약 테스트, 2026-07-31 live smoke | [binanceProvider.ts](../src/infrastructure/providers/binance/binanceProvider.ts), Provider 테스트 | 거래쌍 수는 Binance 상장 상태에 따라 변동 |
+| 암호화폐 종목 탐색·일봉 조회 | 구현 완료 | 계약 테스트, 2026-07-31 live smoke·브라우저 확인 | [binanceProvider.ts](../src/infrastructure/providers/binance/binanceProvider.ts), [binanceCatalog.ts](../src/infrastructure/providers/binance/binanceCatalog.ts), Provider 테스트 | 활성 SPOT·USDT 거래쌍 수는 Binance 상장 상태에 따라 변동 |
 | 미국 주식 Tiingo | 구현 완료 | 계약 테스트 | [tiingoProvider.ts](../src/infrastructure/providers/tiingo/tiingoProvider.ts) | 실제 사용자 키를 사용한 앱 종단 흐름 미검증 |
 | 한국 주식 공공데이터포털 | 구현 완료 | 계약 테스트, 가격 API HTTP 기록 | [krxPublicDataProvider.ts](../src/infrastructure/providers/krxPublicData/krxPublicDataProvider.ts) | 종목 검색 활용신청과 혼합 UI 흐름 미검증 |
 | 투자 시뮬레이션 | 구현 완료 | Golden Fixture·단위 테스트 | [simulationEngine.ts](../src/domain/simulation/simulationEngine.ts), [goldenFixtureSimulation.test.ts](../src/domain/simulation/goldenFixtureSimulation.test.ts) | 배당·세금·TWR·MWR는 현재 범위 밖 |
@@ -92,7 +92,7 @@
 
 ## 5. 시스템 아키텍처
 
-2026-07-26 codebase MCP 전체 인덱스는 1,571 nodes / 4,305 edges였다. 그래프와 2026-07-28 기능 PR #1 병합본 소스 대조에서 확인한 핵심 경로는 다음과 같다.
+2026-07-26 codebase MCP 전체 인덱스는 1,571 nodes / 4,305 edges였다. 그래프의 핵심 경로와 2026-07-31 PR #3 병합본의 Binance 동적 카탈로그·통합 검색 경계를 다시 대조한 결과는 다음과 같다.
 
 ```text
 main.tsx
@@ -208,7 +208,7 @@ main.tsx
 | Tiingo | 미국 주식 검색·일봉 | 사용자 API 키, keyring | 인증·할당량·서버 오류 분류 | 제한된 재시도와 캐시 | 검색 curl 기록, 가격 앱 종단 미검증 |
 | data.go.kr | 한국 주식 검색·일봉 | 사용자 서비스 키, keyring | resultCode·HTTP 오류 분류 | pagination·캐시 | 가격 HTTP 성공 기록, 검색 403 기록 |
 | Frankfurter | USD/KRW 표시 환율 | 키 없음 | 마지막 성공값 또는 오류 상태 | UI 새로고침 | 2026-07-21 브라우저 실 호출 기록 |
-| Notion | 승인된 Git Markdown 미러 | GitHub Environment의 `NOTION_TOKEN` | 모든 페이지 preflight 후 쓰기, 부분 실패 가시화 | 동일 revision 재실행으로 수렴 | 빈 미러 페이지 생성까지 확인. ChartReminder 저장소 publish는 미실행 |
+| Notion | 승인된 Git Markdown 미러 | GitHub Environment의 `NOTION_TOKEN` | 모든 페이지 preflight 후 쓰기, 부분 실패 가시화 | 동일 revision 재실행으로 수렴 | 2026-07-28 [Actions run 30327719825](https://github.com/Yeon-sik/ChartReminder/actions/runs/30327719825)에서 source `95eeb445` Intro·Detail 게시 성공. 최신 revision은 재게시 필요 |
 
 외부 검색형·생성형 AI는 가격 계산과 투자 결론을 만들지 않는다.
 
@@ -230,7 +230,8 @@ main.tsx
 
 | 층 | 도구 | 검증 대상 | 현재 상태 |
 | --- | --- | --- | --- |
-| 정적 검사 | Prettier, ESLint, TypeScript | 형식, 규칙, 타입 경계 | 통과 |
+| 포맷 검사 | Prettier | 형식 | 실패: PR #3 관련 파일 6개 |
+| 정적 분석·타입 | ESLint, TypeScript | 규칙, 타입 경계 | 통과 |
 | 도메인 단위 | Vitest | Decimal, Candle, timeline, replay, simulation, fixture | 통과 |
 | Provider 계약 | Vitest | 정규화, 범위, 오류, 인증, pagination | 통과 |
 | 저장소 통합 | Vitest + better-sqlite3 | migration, Candle·세션·설정 저장소 | 통과 |
@@ -246,6 +247,11 @@ main.tsx
 | 2026-07-28 | 같은 작업 트리 | `npm run build` | PASS. TypeScript + Vite production bundle | Windows 패키지 |
 | 2026-07-26 | 같은 base commit의 UX 작업 트리 | 인앱 Browser | 모달 포커스 순환·복원, BTC 리플레이 요약·진행도·차트, 새 탭 콘솔 오류·경고 0건 | Tauri 전용 Provider |
 | 2026-07-19 | M6 revision | `npm run tauri build`, NSIS 설치·실행·제거 | 당시 PASS | 현재 M7 이후 의존성, MSI 관리자 설치 |
+| 2026-08-08 | `078de18` + docs/runtime 작업 트리 | `npm run format:check` | FAIL. `InstrumentSearchModal` 2개와 Binance Provider·catalog 관련 4개 파일이 Prettier 검사 실패 | 해당 6개 소스 포맷 정리 |
+| 2026-08-08 | 같은 작업 트리 | `npm run lint`, `npm run typecheck`, `npm run test`, `npm run check:rust` | PASS. Vitest 516개 통과, live 2개 skip, cargo check 통과 | opt-in live API, Tauri UI |
+| 2026-08-08 | 같은 작업 트리 | `npm run build` | PASS. TypeScript + Vite production bundle | Windows 패키지 |
+| 2026-07-31 | `078de18`의 기능 commit `f55dc55` | Binance live smoke + 인앱 Browser | 활성 SPOT 1,380개 중 USDT 현물 480개, BTC 외 479개 표시, DOGE 검색·선택·캔들 차트 확인 | 상장 수 변동, 다른 Provider 혼합 |
+| 2026-07-28 | source `95eeb445` | [GitHub Actions manual publish](https://github.com/Yeon-sik/ChartReminder/actions/runs/30327719825) | PASS. Intro·Detail Notion 게시 | 최신 canonical revision 재게시 |
 
 실패하거나 건너뛴 검증은 성공으로 합치지 않는다. `LIVE_API=1`이 필요한 테스트는 기본 품질 게이트에서 제외된다.
 
@@ -298,11 +304,12 @@ main.tsx
 | P0 | 최신 Windows 패키지 미검증 | 현재 코드와 배포 파일이 일치하지 않음 | `npm run tauri build` 후 NSIS·MSI 설치·제거 재검증 |
 | P0 | Provider 이용조건 출시 판정 미완료 | 공개 배포 시 데이터 라이선스 위험 | 상업 사용·표시·캐시·재배포 권한 확정 |
 | P1 | 과거 CashOS draft Release·설치 자산 이름 잔존 | 현재 저장소·제품명과 릴리스 자산이 달라 사용자 혼동 가능 | 새 릴리스 전 자산·태그·링크 정리 |
+| P1 | `main`의 포맷 drift 6개 | 통합 `npm run verify`가 첫 단계에서 중단 | PR #3 관련 파일만 별도 포맷하고 전체 verify 재실행 |
 | P1 | CSP 미설정 | 데스크톱 WebView 보안 방어가 약함 | 필요한 도메인·리소스만 허용하는 CSP 설계·검증 |
 | P1 | SQLite 전체 백업·복구 UX 없음 | 로컬 DB 손상·이동 시 복구 경로 제한 | schema version을 포함한 백업·복원 설계 |
 | P2 | 성능 목표 미측정 | 장기·다자산 구간에서 체감 저하 가능 | 3자산 10년 fixture benchmark 후에만 최적화 결정 |
 
-다음 단일 작업은 실제 키가 있는 Windows Tauri 환경에서 3시장 혼합 리플레이를 검증하고 결과를 이 문서의 runtime evidence로 갱신하는 것이다.
+다음 단일 작업은 PR #3 관련 파일 6개의 포맷 drift를 별도 범위에서 정리해 `npm run verify` 전체를 복구하는 것이다. 이후 실제 키가 있는 Windows Tauri 환경에서 3시장 혼합 리플레이를 검증하고 결과를 runtime evidence로 갱신한다.
 
 ## 14. 배운 점과 재설계 방향
 

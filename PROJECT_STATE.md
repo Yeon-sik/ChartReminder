@@ -209,16 +209,16 @@ Claude는 각 마일스톤 종료 시 이 파일을 갱신한다. 추측이나 �
 
 | 검증 | 상태 | 마지막 명령 | 비고 |
 |---|---|---|---|
-| Format | PASS | `npm run format:check` | 2026-07-31, 저장소 고정 project-docs runtime은 upstream byte 보존을 위해 Prettier 대상에서 제외 |
-| Lint | PASS | `npm run lint` | 2026-07-31, ESLint 10 flat config. 저장소 고정 Node runtime은 독립 test를 통과한 vendored 경계로 제외 |
-| Typecheck | PASS | `npm run typecheck` | 2026-07-31, tsc strict |
-| Unit test | PASS | `npm run test` | 2026-07-31, Vitest 4 + jsdom, 516개 통과 + live 2개 skip |
+| Format | FAIL | `npm run format:check` | 2026-08-08, PR #3의 `InstrumentSearchModal` 2개와 Binance Provider·catalog 관련 4개 파일이 Prettier 검사 실패. 이번 docs 작업에서는 소스 포맷을 변경하지 않음 |
+| Lint | PASS | `npm run lint` | 2026-08-08, ESLint 10 flat config. 저장소 고정 Node runtime은 독립 test를 통과한 vendored 경계로 제외 |
+| Typecheck | PASS | `npm run typecheck` | 2026-08-08, tsc strict |
+| Unit test | PASS | `npm run test` | 2026-08-08, Vitest 4 + jsdom, 516개 통과 + live 2개 skip |
 | Integration test | PASS | `npm run test` | 2026-07-31, Provider 계약(Binance 동적 카탈로그+Tiingo+공공데이터포털, 검색 포함) + FX Provider 계약(Frankfurter) + SQLite(better-sqlite3, app_settings 포함) + use case(다중 provider 검색 포함, 자산 3개 상한 포함) + React 컴포넌트 통합 + 세션 저장소 포함 |
 | Live API smoke | PASS (opt-in, Binance만 자동화) | `$env:LIVE_API="1"; npm run test` | 2026-07-31 Binance 2개 PASS: `exchangeInfo` 활성 USDT 현물 카탈로그와 BTC 일봉 캔들. 공공데이터포털 가격 조회는 사용자의 실 키로 `curl` 직접 호출 검증 완료(2026-07-19, D-019), 종목 검색은 활용신청 안 돼 있어 403만 확인(2026-07-21, D-021). Frankfurter는 curl과 Playwright 브라우저 양쪽에서 실 호출 확인(2026-07-21, D-020). Tiingo 가격 조회는 미검증(실 키 없음), Tiingo 검색은 curl로 확인(2026-07-21, D-021) |
-| Cargo check | PASS | `npm run check:rust` | 2026-07-31. 마지막 의존성 변경은 2026-07-21 `dotenvy` 추가(D-018, `.env` 자동 적용) |
+| Cargo check | PASS | `npm run check:rust` | 2026-08-08. 마지막 의존성 변경은 2026-07-21 `dotenvy` 추가(D-018, `.env` 자동 적용) |
 | npm audit | PASS | `npm audit --production` | 2026-07-19(M6 시점), M7 신규 의존성(`@tauri-apps/plugin-http`) 이후 재실행 안 함. M8·D-020·D-021은 신규 npm 의존성 없음(Rust `dotenvy`만 추가, D-018) |
-| Production build | PASS | `npm run build` | 2026-07-31, tsc + Vite build |
-| Project docs | PASS (local) | `npm run docs:validate`, `npm run docs:render` | 2026-07-31, validator 0 error/0 warning, render-only dry run PASS. Notion publish는 미실행 |
+| Production build | PASS | `npm run build` | 2026-08-08, tsc + Vite build |
+| Project docs | PASS (local + prior publish) | `npm run docs:validate`, `npm run docs:render` | 2026-08-08 최신 스킬 runtime 갱신 후 validator 0 error/0 warning, Intro·Detail render-only PASS. 실제 Notion 게시 이력은 2026-07-28 [run 30327719825](https://github.com/Yeon-sik/ChartReminder/actions/runs/30327719825), source `95eeb445` |
 | Desktop build | PASS (M6 시점) | `npm run tauri build` | 2026-07-19(M6), `CashOS_0.1.0_x64_en-US.msi` + `CashOS_0.1.0_x64-setup.exe` 생성. M7의 새 Rust 의존성(`keyring`, `tauri-plugin-http`)과 M8의 `dotenvy`를 포함한 재빌드는 아직 안 함 — `cargo check`+`npm run tauri dev`(기동 확인)만 확인 |
 | 설치 테스트 | 부분 PASS (M6 시점) | NSIS `/S` 설치 → 실행 → `uninstall.exe /S` | 2026-07-19(M6), 이 머신에서 1회 확인. MSI는 비관리자 셸이라 all-users 설치 권한 부족(Error 1925)으로 미검증. M7 이후 재검증 안 함 |
 | `npm run tauri dev` 기동 확인 | PASS | `npm run tauri dev` | 2026-07-21: Rust 빌드 성공, 패닉 없이 네이티브 창 기동 확인(D-018 도입 후). UI 내부 상호작용(BYOK 자동 적용 문구 렌더링 등)은 네이티브 창이라 자동 캡처 도구가 없어 사용자 육안 확인에 의존. D-020(창 높이 1280 등)·D-021 반영 후 재기동은 아직 안 함 |
