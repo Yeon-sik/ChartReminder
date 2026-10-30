@@ -16,7 +16,13 @@
 - Binance 활성 SPOT·USDT 거래쌍 탐색, 1~3개 자산 비교, 일시투자·정기 정액매수, 수수료·소수점 매수, KRW/USD 표시, session 저장·복원과 JSON/CSV export가 구현돼 있다.
 - `078de18..a5da933` 비교에서 제품 source 변경은 없고 project docs/sync/PROJECT_STATE만 변경됐다. 따라서 구현 기준은 `078de18`을 유지한다.
 
-## 2. 핵심 설계
+## 2. 문제와 해결
+
+**문제**: 최종 수익률 한 숫자만으로는 투자 과정의 현금흐름, 낙폭, 시장별 거래일 차이와 날짜별 경로를 이해하기 어렵다.
+
+**해결**: provider의 일봉을 공통 날짜 타임라인으로 정규화하고, 같은 전략 규칙으로 cash·position·fee·valuation을 결정론적으로 계산해 날짜별로 재생한다.
+
+## 3. 핵심 기능과 결과
 
 | 영역 | 현재 source에서 확인한 범위 |
 | --- | --- |
@@ -26,7 +32,7 @@
 | 로컬 상태 | SQLite/session 저장·복원과 export. |
 | UI | Tauri desktop + React, 차트/날짜 재생과 전략 입력. |
 
-## 3. 검증 현황
+## 4. 검증 현황
 
 | 항목 | 상태 | 근거와 한계 |
 | --- | --- | --- |
@@ -34,13 +40,13 @@
 | 2026-08-08 quality 기록 | 부분 통과 | lint·typecheck·Vitest 516개·Rust 검사·웹 build 통과 기록이 있으나 당시 Binance PR 파일 6개의 Prettier 실패로 통합 `npm run verify`는 미통과였다. |
 | Provider/browser 기록 | 과거 실행 확인 | 2026-07-31 Binance 실 API·브라우저 흐름 확인 기록이 있다. 최신 Windows 패키지와 Tiingo·한국 주식 혼합 session은 미검증이다. |
 
-## 4. 현재 한계와 다음 단계
+## 5. 현재 한계와 다음 단계
 
 - 투자 시뮬레이션은 교육·비교 도구이며 실제 체결·세금·슬리피지·투자 조언을 의미하지 않는다.
 - 최신 Windows installer와 모든 provider의 현재 운영 가용성은 별도 검증이 필요하다.
 - 다음 우선 작업은 formatting gate를 정리하고 최신 desktop package에서 저장·복원·실 provider session을 종단 확인하는 것이다.
 
-## 5. 관련 문서
+## 6. 관련 문서
 
 - [프로젝트 상세](./Project_Detail.md)
 - [PROJECT_STATE](../PROJECT_STATE.md)
