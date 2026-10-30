@@ -1,117 +1,55 @@
 # Chart Reminder | 과거 투자 경로를 날짜별로 재생·비교하는 Windows 앱
 
-> 과거의 특정 기간으로 돌아가 최대 3개 자산에 같은 투자 규칙을 적용하고, 가격 변화와 내 자산가치가 날짜별로 어떻게 달라졌는지 재생하는 로컬 우선 투자 학습 도구다.
+과거의 특정 기간으로 돌아가 최대 3개 자산에 같은 투자 규칙을 적용하고, 가격 변화와 자산가치가 날짜별로 어떻게 달라졌는지 재생하는 Tauri 기반 로컬 우선 투자 학습 도구다.
 
 | 항목 | 내용 |
 | --- | --- |
-| 개발 기간 | 2026-07 ~ 진행 중 |
-| 프로젝트 형태 | 개인 Windows 데스크톱 앱 |
-| 담당 범위 | 제품 범위, 아키텍처, 도메인 계산, UI, 로컬 저장, Provider 연동, 검증 |
-| 현재 상태 | Alpha. 핵심 사용자 흐름은 구현됐지만 최신 데스크톱 패키징과 실 Provider 종단 검증이 남아 있음 |
-| 문서 기준 | `main` merge commit [`078de18`](https://github.com/Yeon-sik/ChartReminder/commit/078de188388fe9fdd8c75f4a2ad012fe8ea05ee8) (feature PR #3) |
-| 주요 기술 | Tauri 2, React 19, TypeScript, Vite, Rust, SQLite, decimal.js, Lightweight Charts |
-| Repository | [Yeon-sik/ChartReminder](https://github.com/Yeon-sik/ChartReminder) |
-| 상세 문서 | [Project_Detail.md](./Project_Detail.md) |
-
-이 문서는 Git 저장소의 Markdown을 진실 원천으로 사용한다. Notion 페이지는 승인된 문서를 보여 주는 전용 미러이며 직접 편집하는 두 번째 원본이 아니다.
-
----
+| 문서 갱신 | 2026-10-30 (Asia/Seoul) |
+| 최신 감사 revision | [main@a5da933](https://github.com/Yeon-sik/ChartReminder/tree/a5da9338469a4c17c299254dec6abfe5344eab50) |
+| 구현 기준 | [main@078de18](https://github.com/Yeon-sik/ChartReminder/tree/078de188388fe9fdd8c75f4a2ad012fe8ea05ee8) — 이후 변경은 project-docs/상태 문서 갱신 |
+| 주요 기술 | Tauri 2 · React 19 · TypeScript · Vite · Rust · SQLite · decimal.js · Lightweight Charts |
+| 저장소 | [Yeon-sik/ChartReminder](https://github.com/Yeon-sik/ChartReminder) |
 
 ## 1. 30초 요약
 
-- **문제**: 최종 수익률 한 숫자만으로는 투자 과정의 변동, 낙폭, 현금 흐름과 서로 다른 시장 달력의 영향을 이해하기 어렵다.
-- **해결**: 사용자가 기간·자산·투자 규칙을 정하면 일봉 데이터를 공통 타임라인으로 정규화하고, 결정론적 시뮬레이션 결과를 날짜별로 재생한다.
-- **핵심 결과**: Binance 활성 SPOT·USDT 거래쌍을 동적으로 탐색하고, 자산 1~3개 비교, 일시투자·정기 정액매수, 수수료·소수점 매수, KRW/USD 표시 통화, 세션 저장·복원, JSON/CSV 내보내기까지 하나의 흐름으로 연결했다.
-- **검증 경계**: 2026-08-08 현재 lint·typecheck·Vitest 516개·Rust 검사·프로덕션 웹 빌드는 통과했다. 다만 `main`의 Binance PR 파일 6개가 Prettier 검사에 실패해 통합 `npm run verify`는 미통과다. 2026-07-31 Binance 실 API·브라우저 흐름은 확인했지만, 최신 Windows 설치 패키지와 실 Tiingo·한국 주식 혼합 세션은 아직 검증되지 않았다.
-- **기술적 차별점**: 계산을 AI 출력에 맡기지 않고 Decimal 기반 도메인 엔진, Golden Fixture, 미래 데이터 비노출 규칙으로 재현성과 설명 가능성을 우선했다.
+- 기간·자산·투자 규칙을 정하면 서로 다른 시장 달력을 공통 타임라인으로 정규화하고 날짜별 포트폴리오 경로를 재생한다.
+- Binance 활성 SPOT·USDT 거래쌍 탐색, 1~3개 자산 비교, 일시투자·정기 정액매수, 수수료·소수점 매수, KRW/USD 표시, session 저장·복원과 JSON/CSV export가 구현돼 있다.
+- `078de18..a5da933` 비교에서 제품 source 변경은 없고 project docs/sync/PROJECT_STATE만 변경됐다. 따라서 구현 기준은 `078de18`을 유지한다.
 
 ## 2. 문제와 해결
 
-| 사용자 문제 | 해결 방식 | 사용자 가치 |
-| --- | --- | --- |
-| 최종 결과만 보면 중간 변동과 손실 구간을 놓친다 | ReplayEngine이 합집합 타임라인을 한 날짜씩 전진시키고 차트·요약을 같은 cursor로 갱신한다 | 결과가 아니라 투자 경로를 이해할 수 있다 |
-| 자산마다 거래일과 통화가 달라 단순 비교가 어렵다 | 관측일 합집합, 이월 가격 상태, 표시 통화 변환을 명시적으로 모델링한다 | 빈 날짜와 환율 가정을 숨기지 않고 비교할 수 있다 |
-| 반복매수와 수수료를 수작업으로 계산하기 어렵다 | 일시투자와 매주·매월 정기매수, 초기 투자 비용, 수수료, 소수점 매수 규칙을 결정론적으로 계산한다 | 같은 규칙을 여러 자산에 일관되게 적용할 수 있다 |
-| 외부 데이터 키와 로컬 기록이 섞이면 보안·복구가 복잡해진다 | 시장 데이터와 세션은 SQLite, API 키는 Windows 자격 증명 관리자에 분리한다 | 비밀정보를 일반 데이터베이스에 평문 저장하지 않는다 |
+**문제**: 최종 수익률 한 숫자만으로는 투자 과정의 현금흐름, 낙폭, 시장별 거래일 차이와 날짜별 경로를 이해하기 어렵다.
 
-이 앱은 실제 주문, 매수·매도 신호, 투자 추천을 제공하지 않는다. 과거 데이터와 명시된 가정으로 학습·비교하는 도구다.
+**해결**: provider의 일봉을 공통 날짜 타임라인으로 정규화하고, 같은 전략 규칙으로 cash·position·fee·valuation을 결정론적으로 계산해 날짜별로 재생한다.
 
 ## 3. 핵심 기능과 결과
 
-| 영역 | 구현 결과 | 저장소 근거 |
+| 영역 | 현재 source에서 확인한 범위 |
+| --- | --- |
+| 시뮬레이션 | 결정론적 날짜별 cash/position/value 계산과 일시투자·DCA 전략. |
+| 데이터 공급 | Binance 등 provider adapter와 공통 daily price timeline. |
+| 비교 | 최대 3개 자산, 공통 타임라인·표시통화·수수료·소수점 처리. |
+| 로컬 상태 | SQLite/session 저장·복원과 export. |
+| UI | Tauri desktop + React, 차트/날짜 재생과 전략 입력. |
+
+## 4. 검증 현황
+
+| 항목 | 상태 | 근거와 한계 |
 | --- | --- | --- |
-| 세션 설정 | 최대 3개 자산, 기간, 표시 기준, 표시 통화, 공통 투자 규칙을 설정한다 | [SessionSetupForm.tsx](../src/features/session-setup/SessionSetupForm.tsx), [sessionSetupModel.ts](../src/features/session-setup/sessionSetupModel.ts) |
-| 자산 검색 | Binance의 활성 SPOT·USDT 거래쌍을 15분 캐시로 동적 탐색하고, Tiingo·공공데이터포털 결과와 함께 하나의 모달에서 검색·시장 필터링한다 | [InstrumentSearchModal.tsx](../src/features/session-setup/InstrumentSearchModal.tsx), [binanceProvider.ts](../src/infrastructure/providers/binance/binanceProvider.ts), [searchInstruments.ts](../src/application/use-cases/searchInstruments.ts) |
-| 데이터 준비 | 캐시 범위를 확인해 누락 구간만 Provider에서 받아 정규화·저장한다 | [ensureCandleRangeCached.ts](../src/application/use-cases/ensureCandleRangeCached.ts), [prepareReplaySession.ts](../src/application/use-cases/prepareReplaySession.ts) |
-| 투자 계산 | 일시투자·정기매수·수수료·소수점 수량·휴장일 이월과 수익률·낙폭을 계산한다 | [simulationEngine.ts](../src/domain/simulation/simulationEngine.ts), [contributionSchedule.ts](../src/domain/simulation/contributionSchedule.ts) |
-| 리플레이 | 재생·일시정지·한 단계·seek·속도 변경·처음부터를 지원한다 | [replayEngine.ts](../src/domain/replay/replayEngine.ts), [PlaybackControls.tsx](../src/features/replay-workspace/PlaybackControls.tsx) |
-| 결과 해석 | 가격 변화, 투자금 변화, 현재 가격, 현금·평가액·손익·수익률과 데이터 상태를 같은 시점으로 보여 준다 | [viewModel.ts](../src/features/replay-workspace/viewModel.ts), [ReplayWorkspace.tsx](../src/features/replay-workspace/ReplayWorkspace.tsx) |
-| 저장과 내보내기 | 세션을 로컬에 저장·복원하고 JSON·CSV 파일로 내보낸다 | [saveReplaySession.ts](../src/application/use-cases/saveReplaySession.ts), [SessionActions.tsx](../src/features/replay-workspace/SessionActions.tsx) |
+| 최신 main diff | 저장소 검증 | `078de18..a5da933`은 제품 source 변경 없이 project-docs/상태 문서만 갱신됐다. |
+| 2026-08-08 quality 기록 | 부분 통과 | lint·typecheck·Vitest 516개·Rust 검사·웹 build 통과 기록이 있으나 당시 Binance PR 파일 6개의 Prettier 실패로 통합 `npm run verify`는 미통과였다. |
+| Provider/browser 기록 | 과거 실행 확인 | 2026-07-31 Binance 실 API·브라우저 흐름 확인 기록이 있다. 최신 Windows 패키지와 Tiingo·한국 주식 혼합 session은 미검증이다. |
 
-## 4. 사용자 흐름
+## 5. 현재 한계와 다음 단계
 
-```text
-기간·표시 통화·투자 규칙 설정
-  → 암호화폐·미국 주식·한국 주식 중 1~3개 자산 선택
-  → 로컬 캐시 확인과 부족한 일봉 데이터 조회
-  → 공통 타임라인과 자산별 시뮬레이션 결과 생성
-  → 날짜별 재생, seek, 차트와 결과 요약 확인
-  → 세션 저장·복원 또는 JSON·CSV 내보내기
-```
+- 투자 시뮬레이션은 교육·비교 도구이며 실제 체결·세금·슬리피지·투자 조언을 의미하지 않는다.
+- 최신 Windows installer와 모든 provider의 현재 운영 가용성은 별도 검증이 필요하다.
+- 다음 우선 작업은 formatting gate를 정리하고 최신 desktop package에서 저장·복원·실 provider session을 종단 확인하는 것이다.
 
-데이터 준비가 실패하면 기존 설정을 버리지 않고 같은 요청으로 다시 시도할 수 있다. 검색 모달은 키보드 포커스 순환, Esc·배경 닫기, 닫은 뒤 원래 트리거로 포커스 복원을 지원한다.
+## 6. 관련 문서
 
-## 5. 구조와 기술 선택
+- [프로젝트 상세](./Project_Detail.md)
+- [PROJECT_STATE](../PROJECT_STATE.md)
+- [README](../README.md)
 
-의존성은 UI와 외부 시스템에서 순수 도메인 쪽으로 향한다.
-
-```text
-React features / Tauri commands
-  → application use cases + ports
-  → domain replay + simulation rules
-
-infrastructure providers / SQLite / keyring
-  → application ports 구현
-```
-
-- React 컴포넌트는 Provider나 SQLite를 직접 생성하지 않는다. [composition.ts](../src/app/composition.ts)가 런타임별 구현을 조립한다.
-- 도메인 계산은 React·Tauri·네트워크·차트 라이브러리를 모른다.
-- 브라우저 프리뷰는 메모리 저장소를, Tauri는 SQLite와 네이티브 HTTP·보안 저장소를 사용한다.
-- 2026-07-26 codebase MCP 전체 그래프는 1,571 nodes / 4,305 edges였으며, 핵심 호출 경로는 `App → SessionSetupForm → prepareReplaySession → ReplayEngine/SimulationEngine → ReplayWorkspace`로 확인됐다. 2026-07-31에는 PR #3의 Binance 동적 카탈로그·모달 결과 수·Provider 계약 테스트를 `main` 소스와 다시 대조했다.
-
-상세한 책임과 데이터 흐름은 [Project_Detail.md](./Project_Detail.md)에 기록한다.
-
-## 6. 검증 현황
-
-| 검증 항목 | 상태 | 확인일 | 근거와 범위 |
-| --- | --- | --- | --- |
-| 포맷 검사 | 실패 | 2026-08-08 | `npm run format:check`; PR #3의 Binance·검색 모달 관련 파일 6개가 Prettier 검사 실패. 이번 docs 작업에서는 소스 포맷을 변경하지 않음 |
-| 정적 분석·타입·테스트·Rust 검사 | 통과 | 2026-08-08 | `npm run lint`, `npm run typecheck`, `npm run test`, `npm run check:rust`; Vitest 516개 통과·live 2개 기본 제외, `cargo check` 통과 |
-| 프로덕션 웹 빌드 | 통과 | 2026-08-08 | `npm run build`; TypeScript 컴파일과 Vite 번들 생성 |
-| Binance 실 API·브라우저 흐름 | 통과 | 2026-07-31 | 활성 SPOT 1,380개 중 USDT 현물 480개 확인. 모달에서 BTC 외 479개 표시, `doge` 검색→DOGE 선택→실제 캔들 차트 준비, 콘솔 오류·경고 0건. 상장 수는 변동 가능 |
-| Notion 문서 미러 | 통과 | 2026-07-28 | [Actions run 30327719825](https://github.com/Yeon-sik/ChartReminder/actions/runs/30327719825)에서 source `95eeb445`의 Intro·Detail 게시 성공. 최신 문서는 새 canonical revision 발행 필요 |
-| 현재 코드의 Tauri 패키지 빌드 | 미검증 | 2026-07-27 | M7 이후 추가된 네이티브 의존성을 포함한 `npm run tauri build` 재실행 필요 |
-| 실 Tiingo 종단 흐름 | 미검증 | 2026-07-27 | 실제 사용자 키가 없어 미국 주식 혼합 세션 전체 흐름은 계약 테스트까지만 확인 |
-| 실 한국 주식 혼합 세션 | 부분 검증 | 2026-07-27 | HTTP 가격 조회 성공 기록은 있으나, 현재 UI에서 검색·혼합 재생까지는 미확인 |
-
-로컬 통과는 설치·배포·실 Provider 동작의 증거로 확대 해석하지 않는다.
-
-## 7. 현재 한계와 다음 단계
-
-- **P0 출시 게이트**: 실제 Tiingo 키와 공공데이터포털 키로 Tauri에서 암호화폐·미국·한국 주식 혼합 세션을 종단 확인한다.
-- **P0 출시 게이트**: 최신 소스와 Rust 의존성으로 Windows 설치 파일을 다시 만들고 NSIS·MSI 설치와 제거를 검증한다.
-- **P1 운영 정리**: 현재 원격 저장소는 ChartReminder로 정리됐지만, 과거 draft Release와 설치 자산에는 CashOS 이름이 남아 있다. 새 릴리스 전 자산·태그·링크를 다시 검토해야 한다.
-- **P1 품질 게이트**: PR #3의 Binance·검색 모달 파일 6개를 별도 포맷 정리해 `npm run verify` 전체를 다시 녹색으로 만든다.
-- **P1 데이터 정책**: 각 Provider의 상업적 사용, 화면 표시, 캐시, 재배포 조건이 불명확하면 공개 릴리스에서 비활성화한다.
-- **범위 밖**: 실제 주문, 투자 추천, 실시간 호가, 모바일 앱, 백엔드 계정 시스템은 현재 구현하지 않는다.
-
-지금 해야 할 단 하나는 기존 기능 의미를 바꾸지 않고 PR #3 파일 6개의 포맷 drift를 정리해 `npm run verify` 전체를 복구하는 것이다. 그 다음 실제 키가 있는 Tauri 환경에서 3시장 혼합 리플레이를 검증한다.
-
-## 8. 관련 문서
-
-- [Project Detail](./Project_Detail.md): 아키텍처, 데이터 경계, 의사결정, 검증과 운영
-- [제품 범위](./00_PRODUCT_SCOPE.md): 사용자와 포함·제외 범위
-- [아키텍처 명세](./01_ARCHITECTURE.md): 계층과 포트
-- [테스트 전략](./08_TEST_STRATEGY.md): 테스트 피라미드와 완료 게이트
-- [보안과 데이터 이용조건](./09_SECURITY_AND_DATA_LICENSING.md): 비밀정보·권한·출시 게이트
-- [문서 게시 운영](./PROJECT_DOCS_OPERATIONS.md): GitHub Environment와 Notion 미러 사용법
+Git Markdown이 원본이며 Notion은 생성 미러다.
